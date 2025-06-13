@@ -1,5 +1,5 @@
 use crate::traits::BookmarkRepository;
-use crate::types::{Bookmark, BookmarkResult, BookmarkError};
+use crate::types::{Bookmark, BookmarkResult, BookmarkError, BookmarkFilters};
 use async_trait::async_trait;
 use automerge::{AutoCommit, ObjType, ReadDoc, ROOT};
 use automerge::transaction::Transactable;
@@ -149,6 +149,47 @@ impl AutomergeBookmarkRepository {
         
         Ok(None)
     }
+    
+    fn apply_filters(&self, mut bookmarks: Vec<Bookmark>, filters: &BookmarkFilters) -> Vec<Bookmark> {
+        // Apply text query filter
+        if let Some(ref query) = filters.text_query {
+            let query_lower = query.to_lowercase();
+            bookmarks.retain(|bookmark| {
+                bookmark.title.to_lowercase().contains(&query_lower) ||
+                bookmark.url.to_lowercase().contains(&query_lower) ||
+                bookmark.author.as_ref().map_or(false, |author| author.to_lowercase().contains(&query_lower)) ||
+                bookmark.notes.iter().any(|note| note.content.to_lowercase().contains(&query_lower))
+            });
+        }
+        
+        // Apply tags filter (AND logic - must contain ALL tags)
+        if let Some(ref filter_tags) = filters.tags {
+            let tags_lower: Vec<String> = filter_tags.iter().map(|tag| tag.to_lowercase()).collect();
+            bookmarks.retain(|bookmark| {
+                tags_lower.iter().all(|tag| {
+                    bookmark.tags.iter().any(|bookmark_tag| bookmark_tag.to_lowercase() == *tag)
+                })
+            });
+        }
+        
+        // Apply reading status filter
+        if let Some(ref status) = filters.reading_status {
+            bookmarks.retain(|bookmark| bookmark.reading_status == *status);
+        }
+        
+        // Apply priority range filter
+        if let Some((min_priority, max_priority)) = filters.priority_range {
+            bookmarks.retain(|bookmark| {
+                if let Some(priority) = bookmark.priority_rating {
+                    priority >= min_priority && priority <= max_priority
+                } else {
+                    false // If no priority set, exclude from priority range filter
+                }
+            });
+        }
+        
+        bookmarks
+    }
 }
 
 #[async_trait]
@@ -159,7 +200,7 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
         Ok(bookmark)
     }
 
-    async fn find_all(&self) -> BookmarkResult<Vec<Bookmark>> {
+    async fn find_all(&self, filters: Option<BookmarkFilters>) -> BookmarkResult<Vec<Bookmark>> {
         let mut bookmarks = Vec::new();
         let list_len = self.doc.length(&self.bookmarks_list);
         
@@ -172,7 +213,86 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
             }
         }
         
+        // Apply filters if provided
+        if let Some(filters) = filters {
+            bookmarks = self.apply_filters(bookmarks, &filters);
+        }
+        
         Ok(bookmarks)
+    }
+    
+    async fn find_by_id(&self, id: &str) -> BookmarkResult<Bookmark> {
+        let list_len = self.doc.length(&self.bookmarks_list);
+        
+        for i in 0..list_len {
+            if let Ok(Some((_, obj_id))) = self.doc.get(&self.bookmarks_list, i) {
+                if let Ok(bookmark) = self.bookmark_from_automerge(&obj_id) {
+                    if bookmark.id == id {
+                        return Ok(bookmark);
+                    }
+                }
+            }
+        }
+        
+        Err(BookmarkError::NotFound(id.to_string()))
+    }
+    
+    async fn update(&mut self, bookmark: Bookmark) -> BookmarkResult<Bookmark> {
+        // For now, implement as delete + create
+        // TODO: Implement proper CRDT field-level updates
+        self.delete(&bookmark.id).await?;
+        self.create(bookmark).await
+    }
+    
+    async fn search_by_text(&self, query: &str) -> BookmarkResult<Vec<Bookmark>> {
+        let all_bookmarks = self.find_all(None).await?;
+        let query_lower = query.to_lowercase();
+        
+        let results = all_bookmarks
+            .into_iter()
+            .filter(|bookmark| {
+                bookmark.title.to_lowercase().contains(&query_lower) ||
+                bookmark.url.to_lowercase().contains(&query_lower) ||
+                bookmark.author.as_ref().map_or(false, |author| author.to_lowercase().contains(&query_lower)) ||
+                bookmark.notes.iter().any(|note| note.content.to_lowercase().contains(&query_lower))
+            })
+            .collect();
+            
+        Ok(results)
+    }
+    
+    async fn find_by_tags(&self, tags: &[String]) -> BookmarkResult<Vec<Bookmark>> {
+        let all_bookmarks = self.find_all(None).await?;
+        let tags_lower: Vec<String> = tags.iter().map(|tag| tag.to_lowercase()).collect();
+        
+        let results = all_bookmarks
+            .into_iter()
+            .filter(|bookmark| {
+                tags_lower.iter().all(|tag| {
+                    bookmark.tags.iter().any(|bookmark_tag| bookmark_tag.to_lowercase() == *tag)
+                })
+            })
+            .collect();
+            
+        Ok(results)
+    }
+    
+    async fn add_note(&mut self, bookmark_id: &str, content: &str) -> BookmarkResult<String> {
+        // Find and update the bookmark
+        let mut bookmark = self.find_by_id(bookmark_id).await?;
+        let note_id = bookmark.add_note(content);
+        self.update(bookmark).await?;
+        Ok(note_id)
+    }
+    
+    async fn remove_note(&mut self, bookmark_id: &str, note_id: &str) -> BookmarkResult<()> {
+        let mut bookmark = self.find_by_id(bookmark_id).await?;
+        if bookmark.remove_note(note_id) {
+            self.update(bookmark).await?;
+            Ok(())
+        } else {
+            Err(BookmarkError::NotFound(format!("Note {} not found", note_id)))
+        }
     }
 
     async fn delete(&mut self, id: &str) -> BookmarkResult<()> {
@@ -235,7 +355,7 @@ mod tests {
         assert!(repo.file_path.exists());
         
         // Verify the bookmark was added
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].url, "https://example.com");
         assert_eq!(bookmarks[0].title, "Example");
@@ -256,7 +376,7 @@ mod tests {
         // Load in second instance and verify bookmark exists
         {
             let repo = AutomergeBookmarkRepository::new(file_path).unwrap();
-            let bookmarks = repo.find_all().await.unwrap();
+            let bookmarks = repo.find_all(None).await.unwrap();
             assert_eq!(bookmarks.len(), 1);
             assert_eq!(bookmarks[0].url, "https://example.com");
             assert_eq!(bookmarks[0].title, "Example");
@@ -267,7 +387,7 @@ mod tests {
     async fn test_find_all_empty() {
         let (repo, _temp_dir) = create_test_repo();
         
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert!(bookmarks.is_empty());
     }
 
@@ -281,7 +401,7 @@ mod tests {
         repo.create(bookmark1.clone()).await.unwrap();
         repo.create(bookmark2.clone()).await.unwrap();
         
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 2);
         
         let urls: Vec<_> = bookmarks.iter().map(|b| &b.url).collect();
@@ -299,7 +419,7 @@ mod tests {
         repo.create(bookmark).await.unwrap();
         
         // Verify it exists
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 1);
         
         // Delete it
@@ -307,7 +427,7 @@ mod tests {
         assert!(result.is_ok());
         
         // Verify it's gone
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert!(bookmarks.is_empty());
     }
 
@@ -338,7 +458,7 @@ mod tests {
         // Verify deletion persisted
         {
             let repo = AutomergeBookmarkRepository::new(file_path).unwrap();
-            let bookmarks = repo.find_all().await.unwrap();
+            let bookmarks = repo.find_all(None).await.unwrap();
             assert!(bookmarks.is_empty());
             
             // Try to delete again - should fail
@@ -382,7 +502,7 @@ mod tests {
         
         repo.create(original_bookmark).await.unwrap();
         
-        let retrieved_bookmarks = repo.find_all().await.unwrap();
+        let retrieved_bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(retrieved_bookmarks.len(), 1);
         
         let retrieved_bookmark = &retrieved_bookmarks[0];
