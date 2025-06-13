@@ -6,7 +6,7 @@ mod commands;
 use std::path::PathBuf;
 use std::process;
 use clap::Parser;
-use commands::{Cli, Commands, handle_add_command, handle_list_command, handle_delete_command};
+use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, output};
 use adapters::AutomergeBookmarkRepository;
 use types::BookmarkError;
 
@@ -21,8 +21,8 @@ fn get_data_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(data_dir.join("bookmarks.automerge"))
 }
 
-fn handle_bookmark_error(error: BookmarkError) -> ! {
-    eprintln!("Error: {}", error);
+fn handle_bookmark_error(error: BookmarkError, format: OutputFormat) -> ! {
+    output::print_error(format, &error);
     let exit_code = match error {
         BookmarkError::InvalidUrl(_) => 2,
         BookmarkError::NotFound(_) => 3,
@@ -36,13 +36,21 @@ fn handle_bookmark_error(error: BookmarkError) -> ! {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    let format = OutputFormat::from(cli.json);
     
     // Initialize repository
     let data_file_path = get_data_file_path()?;
     let mut repository = match AutomergeBookmarkRepository::new(data_file_path) {
         Ok(repo) => repo,
         Err(e) => {
-            eprintln!("Failed to initialize bookmark repository: {}", e);
+            match format {
+                OutputFormat::Json => {
+                    output::print_error(format, &e);
+                }
+                OutputFormat::Human => {
+                    eprintln!("Failed to initialize bookmark repository: {}", e);
+                }
+            }
             process::exit(1);
         }
     };
@@ -50,18 +58,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Execute commands
     let result = match cli.command {
         Commands::Add(args) => {
-            handle_add_command(args, &mut repository).await
+            handle_add_command(args, &mut repository, format).await
         }
         Commands::List => {
-            handle_list_command(&mut repository).await
+            handle_list_command(&mut repository, format).await
         }
         Commands::Delete(args) => {
-            handle_delete_command(args, &mut repository).await
+            handle_delete_command(args, &mut repository, format).await
         }
     };
     
     if let Err(error) = result {
-        handle_bookmark_error(error);
+        handle_bookmark_error(error, format);
     }
     
     Ok(())

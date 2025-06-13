@@ -1,6 +1,16 @@
-use crate::commands::CommandHandler;
+use crate::commands::{CommandHandler, OutputFormat, output};
 use crate::traits::BookmarkRepository;
 use crate::types::{Bookmark, BookmarkResult};
+use serde::{Serialize, Deserialize};
+
+/// JSON response data for list command
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ListResponse {
+    pub bookmarks: Vec<Bookmark>,
+    pub total_count: usize,
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
+}
 
 pub struct ListCommand;
 
@@ -47,19 +57,35 @@ impl ListCommand {
 
 #[async_trait::async_trait]
 impl CommandHandler for ListCommand {
-    async fn execute(&self, repository: &mut dyn BookmarkRepository) -> BookmarkResult<()> {
+    async fn execute(&self, repository: &mut dyn BookmarkRepository, format: OutputFormat) -> BookmarkResult<()> {
         let bookmarks = repository.find_all(None).await?;
-        let output = self.format_bookmark_list(&bookmarks);
-        print!("{}", output);
+        
+        match format {
+            OutputFormat::Json => {
+                let response = ListResponse {
+                    total_count: bookmarks.len(),
+                    bookmarks,
+                    page: None, // No pagination implemented yet
+                    per_page: None,
+                };
+                output::print_response(format, response)?;
+            }
+            OutputFormat::Human => {
+                let output = self.format_bookmark_list(&bookmarks);
+                print!("{}", output);
+            }
+        }
+        
         Ok(())
     }
 }
 
 pub async fn handle_list_command(
     repository: &mut dyn BookmarkRepository,
+    format: OutputFormat,
 ) -> BookmarkResult<()> {
     let command = ListCommand::new();
-    command.execute(repository).await
+    command.execute(repository, format).await
 }
 
 #[cfg(test)]
@@ -72,7 +98,7 @@ mod tests {
     async fn test_list_empty_repository() {
         let mut repo = MockBookmarkRepository::new();
         
-        let result = handle_list_command(&mut repo).await;
+        let result = handle_list_command(&mut repo, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         // The actual output is printed, but we can test the formatting method directly
@@ -88,7 +114,7 @@ mod tests {
         let bookmark = Bookmark::new("https://example.com", "Example Site").unwrap();
         repo.create(bookmark.clone()).await.unwrap();
         
-        let result = handle_list_command(&mut repo).await;
+        let result = handle_list_command(&mut repo, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         // Test formatting directly
@@ -113,7 +139,7 @@ mod tests {
         repo.create(bookmark2.clone()).await.unwrap();
         repo.create(bookmark3.clone()).await.unwrap();
         
-        let result = handle_list_command(&mut repo).await;
+        let result = handle_list_command(&mut repo, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         // Test formatting directly
@@ -209,5 +235,54 @@ mod tests {
         assert!(lines[4].starts_with("  Added:")); // First bookmark date
         assert_eq!(lines[5], ""); // Empty line between bookmarks
         assert!(lines[6].starts_with("2. [")); // Second bookmark
+    }
+
+    #[tokio::test]
+    async fn test_list_command_json_output() {
+        let mut repo = MockBookmarkRepository::new();
+        let bookmark1 = Bookmark::new("https://example.com", "Example Site").unwrap();
+        let bookmark2 = Bookmark::new("https://test.com", "Test Site").unwrap();
+        
+        repo.create(bookmark1).await.unwrap();
+        repo.create(bookmark2).await.unwrap();
+        
+        let result = handle_list_command(&mut repo, OutputFormat::Json).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_command_handler_json_format() {
+        let mut repo = MockBookmarkRepository::new();
+        let bookmark = Bookmark::new("https://example.com", "Test").unwrap();
+        repo.create(bookmark.clone()).await.unwrap();
+        
+        let command = ListCommand::new();
+        let result = command.execute(&mut repo, OutputFormat::Json).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_response_serialization() {
+        let bookmark1 = Bookmark::new("https://example.com", "Test 1").unwrap();
+        let bookmark2 = Bookmark::new("https://test.com", "Test 2").unwrap();
+        let bookmarks = vec![bookmark1, bookmark2];
+        
+        let response = ListResponse {
+            total_count: bookmarks.len(),
+            bookmarks: bookmarks.clone(),
+            page: Some(1),
+            per_page: Some(10),
+        };
+        
+        // Test that the response can be serialized to JSON
+        let json = serde_json::to_string(&response);
+        assert!(json.is_ok());
+        
+        let json_str = json.unwrap();
+        assert!(json_str.contains("\"total_count\":2"));
+        assert!(json_str.contains("\"page\":1"));
+        assert!(json_str.contains("\"per_page\":10"));
+        assert!(json_str.contains("Test 1"));
+        assert!(json_str.contains("Test 2"));
     }
 }

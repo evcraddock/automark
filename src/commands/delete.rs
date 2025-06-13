@@ -1,6 +1,15 @@
-use crate::commands::{CommandHandler, DeleteArgs};
+use crate::commands::{CommandHandler, DeleteArgs, OutputFormat, output};
 use crate::traits::BookmarkRepository;
 use crate::types::{Bookmark, BookmarkResult, BookmarkError};
+use serde::{Serialize, Deserialize};
+
+/// JSON response data for delete command
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DeleteResponse {
+    pub deleted_bookmark: Bookmark,
+    pub operation_status: String,
+    pub affected_count: u32,
+}
 
 pub struct DeleteCommand {
     args: DeleteArgs,
@@ -60,11 +69,25 @@ impl DeleteCommand {
 
 #[async_trait::async_trait]
 impl CommandHandler for DeleteCommand {
-    async fn execute(&self, repository: &mut dyn BookmarkRepository) -> BookmarkResult<()> {
+    async fn execute(&self, repository: &mut dyn BookmarkRepository, format: OutputFormat) -> BookmarkResult<()> {
         let bookmark = self.find_bookmark_by_id(repository).await?;
         repository.delete(&bookmark.id).await?;
-        let confirmation = self.format_deletion_confirmation(&bookmark);
-        print!("{}", confirmation);
+        
+        match format {
+            OutputFormat::Json => {
+                let response = DeleteResponse {
+                    deleted_bookmark: bookmark,
+                    operation_status: "success".to_string(),
+                    affected_count: 1,
+                };
+                output::print_response(format, response)?;
+            }
+            OutputFormat::Human => {
+                let confirmation = self.format_deletion_confirmation(&bookmark);
+                print!("{}", confirmation);
+            }
+        }
+        
         Ok(())
     }
 }
@@ -72,9 +95,10 @@ impl CommandHandler for DeleteCommand {
 pub async fn handle_delete_command(
     args: DeleteArgs,
     repository: &mut dyn BookmarkRepository,
+    format: OutputFormat,
 ) -> BookmarkResult<()> {
     let command = DeleteCommand::new(args);
-    command.execute(repository).await
+    command.execute(repository, format).await
 }
 
 #[cfg(test)]
@@ -91,7 +115,7 @@ mod tests {
         repo.create(bookmark.clone()).await.unwrap();
         
         let args = DeleteArgs { id: bookmark_id.clone() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_ok());
         
@@ -108,7 +132,7 @@ mod tests {
         repo.create(bookmark.clone()).await.unwrap();
         
         let args = DeleteArgs { id: "abcdef12".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_ok());
         
@@ -130,7 +154,7 @@ mod tests {
         repo.create(bookmark2).await.unwrap();
         
         let args = DeleteArgs { id: "abcdef".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_err());
         if let Err(BookmarkError::InvalidId(msg)) = result {
@@ -151,7 +175,7 @@ mod tests {
         let mut repo = MockBookmarkRepository::new();
         
         let args = DeleteArgs { id: "nonexistent".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_err());
         if let Err(BookmarkError::NotFound(id)) = result {
@@ -169,7 +193,7 @@ mod tests {
         
         // ID longer than 8 chars that doesn't match
         let args = DeleteArgs { id: "verylongidthatdoesnotexist".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_err());
         if let Err(BookmarkError::NotFound(id)) = result {
@@ -215,7 +239,7 @@ mod tests {
         
         // Search for "abc" should find exact match
         let args = DeleteArgs { id: "abc".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_ok());
         
@@ -235,7 +259,7 @@ mod tests {
         
         // Use first 6 chars as partial ID
         let args = DeleteArgs { id: "unique".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         
         assert!(result.is_ok());
         
@@ -254,7 +278,7 @@ mod tests {
         
         // Test with exactly 8 characters (should try partial match)
         let args = DeleteArgs { id: "12345678".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         // Re-add bookmark
@@ -262,7 +286,7 @@ mod tests {
         
         // Test with 9 characters (should only try exact match)
         let args = DeleteArgs { id: "123456789".to_string() };
-        let result = handle_delete_command(args, &mut repo).await;
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
         assert!(result.is_err());
         if let Err(BookmarkError::NotFound(_)) = result {
             // Expected
@@ -276,5 +300,59 @@ mod tests {
         let args = DeleteArgs { id: "test".to_string() };
         let command = DeleteCommand::new(args);
         assert_eq!(command.args.id, "test");
+    }
+
+    #[tokio::test]
+    async fn test_delete_command_json_output() {
+        let mut repo = MockBookmarkRepository::new();
+        let bookmark = Bookmark::new("https://example.com", "Example Site").unwrap();
+        let bookmark_id = bookmark.id.clone();
+        repo.create(bookmark.clone()).await.unwrap();
+        
+        let args = DeleteArgs { id: bookmark_id.clone() };
+        let result = handle_delete_command(args, &mut repo, OutputFormat::Json).await;
+        
+        assert!(result.is_ok());
+        
+        // Verify bookmark was deleted
+        let remaining = repo.find_all(None).await.unwrap();
+        assert!(remaining.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_command_handler_json_format() {
+        let mut repo = MockBookmarkRepository::new();
+        let bookmark = Bookmark::new("https://example.com", "Test").unwrap();
+        let bookmark_id = bookmark.id.clone();
+        repo.create(bookmark.clone()).await.unwrap();
+        
+        let args = DeleteArgs { id: bookmark_id };
+        let command = DeleteCommand::new(args);
+        let result = command.execute(&mut repo, OutputFormat::Json).await;
+        assert!(result.is_ok());
+        
+        // Verify bookmark was deleted
+        let remaining = repo.find_all(None).await.unwrap();
+        assert!(remaining.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_response_serialization() {
+        let bookmark = Bookmark::new("https://example.com", "Test").unwrap();
+        let response = DeleteResponse {
+            deleted_bookmark: bookmark.clone(),
+            operation_status: "success".to_string(),
+            affected_count: 1,
+        };
+        
+        // Test that the response can be serialized to JSON
+        let json = serde_json::to_string(&response);
+        assert!(json.is_ok());
+        
+        let json_str = json.unwrap();
+        assert!(json_str.contains("\"operation_status\":\"success\""));
+        assert!(json_str.contains("\"affected_count\":1"));
+        assert!(json_str.contains(&bookmark.id));
+        assert!(json_str.contains("Test"));
     }
 }
