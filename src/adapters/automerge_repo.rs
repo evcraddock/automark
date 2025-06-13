@@ -99,6 +99,12 @@ impl AutomergeBookmarkRepository {
             url,
             title,
             bookmarked_date,
+            author: None,
+            tags: Vec::new(),
+            publish_date: None,
+            notes: Vec::new(),
+            reading_status: crate::types::ReadingStatus::Unread,
+            priority_rating: None,
         })
     }
 

@@ -11,6 +11,41 @@ pub struct Bookmark {
     pub url: String,
     pub title: String,
     pub bookmarked_date: DateTime<Utc>,
+    pub author: Option<String>,
+    pub tags: Vec<String>,
+    pub publish_date: Option<DateTime<Utc>>,
+    pub notes: Vec<Note>,
+    pub reading_status: ReadingStatus,
+    pub priority_rating: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: String,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ReadingStatus {
+    Unread,
+    Reading,
+    Completed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SortOrder {
+    PublishDate,
+    BookmarkedDate,
+    Title,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BookmarkFilters {
+    pub text_query: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub reading_status: Option<ReadingStatus>,
+    pub priority_range: Option<(u8, u8)>,
 }
 
 impl Bookmark {
@@ -28,13 +63,169 @@ impl Bookmark {
             url: url.to_string(),
             title: title.trim().to_string(),
             bookmarked_date: Utc::now(),
+            author: None,
+            tags: Vec::new(),
+            publish_date: None,
+            notes: Vec::new(),
+            reading_status: ReadingStatus::Unread,
+            priority_rating: None,
         })
+    }
+
+    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags.into_iter().map(|tag| tag.to_lowercase()).collect();
+        self
+    }
+
+    pub fn with_priority(mut self, priority: u8) -> BookmarkResult<Self> {
+        if !(1..=5).contains(&priority) {
+            return Err(BookmarkError::InvalidId(format!("Priority must be between 1 and 5, got {}", priority)));
+        }
+        self.priority_rating = Some(priority);
+        Ok(self)
+    }
+
+    pub fn add_note(&mut self, content: &str) -> String {
+        let note = Note::new(content);
+        let note_id = note.id.clone();
+        self.notes.push(note);
+        note_id
+    }
+
+    pub fn remove_note(&mut self, note_id: &str) -> bool {
+        if let Some(pos) = self.notes.iter().position(|n| n.id == note_id) {
+            self.notes.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Note {
+    pub fn new(content: &str) -> Self {
+        Note {
+            id: Uuid::new_v4().to_string(),
+            content: content.to_string(),
+            created_at: Utc::now(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_enhanced_bookmark_creation() {
+        let bookmark = Bookmark::new("https://example.com", "Example Site").unwrap();
+        
+        assert_eq!(bookmark.url, "https://example.com");
+        assert_eq!(bookmark.title, "Example Site");
+        assert_eq!(bookmark.author, None);
+        assert_eq!(bookmark.tags, Vec::<String>::new());
+        assert_eq!(bookmark.publish_date, None);
+        assert_eq!(bookmark.notes, Vec::<Note>::new());
+        assert_eq!(bookmark.reading_status, ReadingStatus::Unread);
+        assert_eq!(bookmark.priority_rating, None);
+    }
+
+    #[test]
+    fn test_tag_normalization() {
+        let bookmark = Bookmark::new("https://example.com", "Test")
+            .unwrap()
+            .with_tags(vec!["Rust".to_string(), "PROGRAMMING".to_string(), "Web".to_string()]);
+        
+        assert_eq!(bookmark.tags, vec!["rust", "programming", "web"]);
+    }
+
+    #[test]
+    fn test_priority_validation() {
+        let bookmark = Bookmark::new("https://example.com", "Test").unwrap();
+        
+        // Valid priorities
+        assert!(bookmark.clone().with_priority(1).is_ok());
+        assert!(bookmark.clone().with_priority(3).is_ok());
+        assert!(bookmark.clone().with_priority(5).is_ok());
+        
+        // Invalid priorities
+        assert!(bookmark.clone().with_priority(0).is_err());
+        assert!(bookmark.clone().with_priority(6).is_err());
+    }
+
+    #[test]
+    fn test_note_immutability() {
+        let mut bookmark = Bookmark::new("https://example.com", "Test").unwrap();
+        
+        // Add notes
+        let note_id1 = bookmark.add_note("First note");
+        let _note_id2 = bookmark.add_note("Second note");
+        
+        assert_eq!(bookmark.notes.len(), 2);
+        assert_eq!(bookmark.notes[0].content, "First note");
+        assert_eq!(bookmark.notes[1].content, "Second note");
+        
+        // Remove a note
+        assert!(bookmark.remove_note(&note_id1));
+        assert_eq!(bookmark.notes.len(), 1);
+        assert_eq!(bookmark.notes[0].content, "Second note");
+        
+        // Try to remove non-existent note
+        assert!(!bookmark.remove_note("non-existent"));
+    }
+
+    #[test]
+    fn test_note_creation() {
+        let note = Note::new("Test content");
+        
+        assert_eq!(note.content, "Test content");
+        assert!(!note.id.is_empty());
+        assert!(note.created_at <= Utc::now());
+    }
+
+    #[test]
+    fn test_reading_status_serialization() {
+        let status = ReadingStatus::Reading;
+        let json = serde_json::to_string(&status).unwrap();
+        let deserialized: ReadingStatus = serde_json::from_str(&json).unwrap();
+        
+        assert_eq!(status, deserialized);
+    }
+
+    #[test]
+    fn test_bookmark_filters_creation() {
+        let filters = BookmarkFilters {
+            text_query: Some("rust".to_string()),
+            tags: Some(vec!["programming".to_string()]),
+            reading_status: Some(ReadingStatus::Unread),
+            priority_range: Some((3, 5)),
+        };
+        
+        assert_eq!(filters.text_query, Some("rust".to_string()));
+        assert_eq!(filters.tags, Some(vec!["programming".to_string()]));
+        assert_eq!(filters.reading_status, Some(ReadingStatus::Unread));
+        assert_eq!(filters.priority_range, Some((3, 5)));
+    }
+
+    #[test]
+    fn test_enhanced_serialization() {
+        let mut bookmark = Bookmark::new("https://example.com", "Example")
+            .unwrap()
+            .with_tags(vec!["rust".to_string()])
+            .with_priority(4).unwrap();
+        
+        bookmark.add_note("Test note");
+        
+        // Test serialization
+        let json = serde_json::to_string(&bookmark).unwrap();
+        assert!(json.contains("rust"));
+        assert!(json.contains("Test note"));
+        assert!(json.contains("Unread"));
+        
+        // Test deserialization
+        let deserialized: Bookmark = serde_json::from_str(&json).unwrap();
+        assert_eq!(bookmark, deserialized);
+    }
 
     #[test]
     fn test_create_valid_bookmark() {
