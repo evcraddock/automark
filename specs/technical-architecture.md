@@ -47,6 +47,7 @@ src/
 ├── commands/
 │   ├── add.rs                 # Each command is isolated
 │   ├── list.rs
+│   ├── delete.rs              # Delete bookmarks by ID
 │   ├── search.rs
 │   └── sync.rs
 └── tui/
@@ -98,6 +99,13 @@ src/
 - Returns domain BookmarkResult types
 - Implemented by AutomergeBookmarkRepository adapter
 
+**Automerge-Specific Data Operations:**
+- Collections (tags, notes) use Automerge sequences for CRDT semantics
+- Bookmark updates merge field-by-field to preserve concurrent modifications
+- Delete operations use tombstone markers to maintain CRDT consistency
+- Complex nested updates decomposed into atomic CRDT operations
+- All mutations produce new document states with causal ordering
+
 ### Metadata Extraction
 
 **MetadataExtractor Trait:**
@@ -147,6 +155,13 @@ src/
 - Vector arguments for multiple values (tags)
 - Type-safe parsing using clap derives
 
+**Output Format Options:**
+- Global `--json` flag for machine-readable output
+- Human-readable format by default (tables, formatted text)
+- JSON output includes structured data with consistent schema
+- Error responses also available in JSON format with error codes
+- JSON schema versioning for API compatibility
+
 ### TUI Key Bindings
 - `j/k` - Navigate up/down
 - `Enter` - Select/open details
@@ -162,8 +177,14 @@ src/
 **Error Display Strategy:**
 - BookmarkError implements Display trait for user-friendly messages
 - Different error variants provide contextual information
-- CLI displays errors directly to stderr
+- CLI displays errors directly to stderr (human format) or stdout (JSON format)
 - TUI shows errors as temporary status messages at bottom of screen
+
+**JSON Error Format:**
+- Consistent error schema: `{"error": {"code": "ERROR_TYPE", "message": "description", "details": {...}}}`
+- Standard error codes for programmatic handling
+- Optional details object for additional context
+- HTTP-style error codes where applicable
 
 **TUI Message System:**
 - TuiMessage enum for different message types (Success, Error, Info)
@@ -183,11 +204,53 @@ src/
 - `config` crate for configuration management (supports multiple formats)
 - `dirs` crate for cross-platform directory discovery
 - `serde_json` for JSON serialization/deserialization
+- `serde` with derive macros for JSON output formatting
 
 ### Data Storage Locations
 - **Data**: `~/.local/share/automark/` (Automerge document storage)
 - **Config**: `~/.config/automark/` (configuration files)
 - **Format**: Automerge binary format for bookmark data
+
+**Automerge Document Structure:**
+- Root document contains map of bookmark IDs to bookmark objects
+- Each bookmark stored as nested map with scalar fields (id, url, title, etc.)
+- Tags collection stored as Automerge sequence (list CRDT)
+- Notes collection stored as sequence of immutable note objects
+- Timestamps use Automerge's built-in counter type for consistency
+- All collections use appropriate CRDT types for conflict-free merging
+
+**CRDT Conflict Resolution Strategy:**
+- **Scalar conflicts**: Last-writer-wins using Automerge actor ordering
+- **Collection conflicts**: Set union for tags, sequence ordering for notes
+- **Structural conflicts**: Field-level resolution maintains referential integrity
+- **Delete conflicts**: Tombstone markers prevent resurrection of deleted items
+- **Concurrent updates**: Automerge automatically merges non-conflicting changes
+
+## Local-First Synchronization Architecture
+
+**CRDT-Based Synchronization:**
+- Each device maintains its own Automerge document
+- Changes are applied locally first (offline-first operation)
+- Documents can be merged without central coordination
+- Automatic conflict resolution through Automerge's CRDT semantics
+
+**Peer Discovery & Sync Protocols:**
+- Initial implementation: Manual sync via file sharing
+- Future: Network-based peer discovery (mDNS, manual peer configuration)
+- Sync command triggers document exchange and merge operations
+- Bidirectional sync ensures all peers converge to same state
+
+**Offline-First Operational Model:**
+- All operations work without network connectivity
+- Local changes are immediately persisted to Automerge document
+- Sync operations are explicit and user-initiated
+- Graceful degradation when peers are unavailable
+
+**Document Versioning & History:**
+- Automerge maintains complete operation history
+- Each change creates new document state with causal ordering
+- No data loss during concurrent modifications
+- Version vectors track document evolution across peers
 
 ## Configuration & Settings
 
@@ -203,6 +266,7 @@ src/
 - Simple TOML format with `[storage]` section
 - Only `data_dir` setting for initial version
 - Extensible structure for future settings
+- Sync peer configuration (addresses, discovery methods)
 
 ## Testing Strategy
 
