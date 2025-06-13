@@ -7,9 +7,9 @@ pub mod add;
 pub mod list;
 pub mod delete;
 
-pub use add::{AddCommand, handle_add_command};
-pub use list::{ListCommand, handle_list_command};
-pub use delete::{DeleteCommand, handle_delete_command};
+pub use add::handle_add_command;
+pub use list::handle_list_command;
+pub use delete::handle_delete_command;
 
 #[derive(Parser)]
 #[command(name = "automark")]
