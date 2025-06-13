@@ -34,18 +34,45 @@ impl AutomergeBookmarkRepository {
             if bytes.is_empty() {
                 AutoCommit::new()
             } else {
-                AutoCommit::load(&bytes)
-                    .map_err(|e| BookmarkError::InvalidUrl(format!("Failed to load Automerge document: {}", e)))?
+                match AutoCommit::load(&bytes) {
+                    Ok(loaded_doc) => {
+                        // Check if we have the old list-based structure
+                        match loaded_doc.get(ROOT, "bookmarks") {
+                            Ok(Some((_, obj_id))) => {
+                                match loaded_doc.object_type(&obj_id) {
+                                    Ok(ObjType::List) => {
+                                        // Old list format detected - delete the file and start fresh
+                                        println!("Incompatible data format detected. Starting with fresh database...");
+                                        let _ = fs::remove_file(path);
+                                        AutoCommit::new()
+                                    }
+                                    _ => {
+                                        // New map format or other - use as-is
+                                        loaded_doc
+                                    }
+                                }
+                            }
+                            _ => loaded_doc
+                        }
+                    }
+                    Err(_) => {
+                        // Corrupted file - delete and start fresh
+                        println!("Corrupted database file detected. Starting with fresh database...");
+                        let _ = fs::remove_file(path);
+                        AutoCommit::new()
+                    }
+                }
             }
         } else {
             AutoCommit::new()
         };
 
-        // Get or create the bookmarks map
+        // Ensure we have the map structure
         let bookmarks_map = match doc.get(ROOT, "bookmarks")
             .map_err(|e| BookmarkError::InvalidUrl(format!("Failed to get bookmarks: {}", e)))? {
             Some((_, obj_id)) => obj_id,
             None => {
+                // Create new map structure
                 doc.put_object(ROOT, "bookmarks", ObjType::Map)
                     .map_err(|e| BookmarkError::InvalidUrl(format!("Failed to create bookmarks map: {}", e)))?
             }
@@ -53,6 +80,7 @@ impl AutomergeBookmarkRepository {
 
         Ok((doc, bookmarks_map))
     }
+
 
     fn save(&mut self) -> BookmarkResult<()> {
         let bytes = self.doc.save();
