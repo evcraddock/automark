@@ -1,8 +1,20 @@
 pub mod bookmark;
 
-pub use bookmark::{Bookmark, Note, ReadingStatus, SortOrder, BookmarkFilters};
+pub use bookmark::{Bookmark, Note, ReadingStatus, SortOrder, BookmarkFilters, ExtractedMetadata};
 
 use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ExtractorError {
+    #[error("Network request failed: {0}")]
+    NetworkError(String),
+    #[error("Failed to parse HTML: {0}")]
+    ParseError(String),
+    #[error("Request timed out")]
+    Timeout,
+    #[error("Invalid URL: {0}")]
+    InvalidUrl(String),
+}
 
 #[derive(Debug, Error)]
 pub enum BookmarkError {
@@ -14,6 +26,8 @@ pub enum BookmarkError {
     EmptyTitle,
     #[error("Invalid or ambiguous ID: {0}")]
     InvalidId(String),
+    #[error("Metadata extraction failed: {0}")]
+    MetadataExtraction(#[from] ExtractorError),
 }
 
 pub type BookmarkResult<T> = Result<T, BookmarkError>;
@@ -50,5 +64,31 @@ mod tests {
 
         let invalid_id = BookmarkError::InvalidId("test".to_string());
         assert!(matches!(invalid_id, BookmarkError::InvalidId(_)));
+    }
+
+    #[test]
+    fn test_extractor_error_types() {
+        let network_error = ExtractorError::NetworkError("connection failed".to_string());
+        assert!(matches!(network_error, ExtractorError::NetworkError(_)));
+        assert_eq!(network_error.to_string(), "Network request failed: connection failed");
+
+        let parse_error = ExtractorError::ParseError("malformed html".to_string());
+        assert!(matches!(parse_error, ExtractorError::ParseError(_)));
+        assert_eq!(parse_error.to_string(), "Failed to parse HTML: malformed html");
+
+        let timeout_error = ExtractorError::Timeout;
+        assert!(matches!(timeout_error, ExtractorError::Timeout));
+        assert_eq!(timeout_error.to_string(), "Request timed out");
+
+        let invalid_url_error = ExtractorError::InvalidUrl("bad-url".to_string());
+        assert!(matches!(invalid_url_error, ExtractorError::InvalidUrl(_)));
+        assert_eq!(invalid_url_error.to_string(), "Invalid URL: bad-url");
+    }
+
+    #[test]
+    fn test_bookmark_error_from_extractor_error() {
+        let extractor_error = ExtractorError::NetworkError("test".to_string());
+        let bookmark_error: BookmarkError = extractor_error.into();
+        assert!(matches!(bookmark_error, BookmarkError::MetadataExtraction(_)));
     }
 }

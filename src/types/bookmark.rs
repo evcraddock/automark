@@ -48,6 +48,13 @@ pub struct BookmarkFilters {
     pub priority_range: Option<(u8, u8)>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExtractedMetadata {
+    pub title: Option<String>,
+    pub author: Option<String>,
+    pub publish_date: Option<DateTime<Utc>>,
+}
+
 impl Bookmark {
     pub fn new(url: &str, title: &str) -> BookmarkResult<Self> {
         // Validate title is not empty
@@ -222,9 +229,40 @@ mod tests {
         assert!(json.contains("Test note"));
         assert!(json.contains("Unread"));
         
-        // Test deserialization
+        // Test deserialized
         let deserialized: Bookmark = serde_json::from_str(&json).unwrap();
         assert_eq!(bookmark, deserialized);
+    }
+
+    #[test]
+    fn test_extracted_metadata_creation() {
+        use super::ExtractedMetadata;
+        
+        let metadata = ExtractedMetadata {
+            title: Some("Test Title".to_string()),
+            author: Some("Test Author".to_string()),
+            publish_date: Some(Utc::now()),
+        };
+        
+        assert_eq!(metadata.title, Some("Test Title".to_string()));
+        assert_eq!(metadata.author, Some("Test Author".to_string()));
+        assert!(metadata.publish_date.is_some());
+    }
+
+    #[test]
+    fn test_extracted_metadata_serialization() {
+        use super::ExtractedMetadata;
+        
+        let metadata = ExtractedMetadata {
+            title: Some("Test Title".to_string()),
+            author: None,
+            publish_date: None,
+        };
+        
+        let json = serde_json::to_string(&metadata).unwrap();
+        let deserialized: ExtractedMetadata = serde_json::from_str(&json).unwrap();
+        
+        assert_eq!(metadata, deserialized);
     }
 
     #[test]

@@ -28,6 +28,7 @@ fn handle_bookmark_error(error: BookmarkError) -> ! {
         BookmarkError::NotFound(_) => 3,
         BookmarkError::EmptyTitle => 2,
         BookmarkError::InvalidId(_) => 3,
+        BookmarkError::MetadataExtraction(_) => 4,
     };
     process::exit(exit_code);
 }
