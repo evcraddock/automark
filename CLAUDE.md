@@ -1,2 +1,3 @@
 - before commiting code always run clippy, ensure that all unit tests pass and the application builds
 - if possible fix warnings with cargo fix
+- never merge pull requests until they are approved

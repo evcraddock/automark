@@ -34,8 +34,11 @@ pub enum Commands {
 pub struct AddArgs {
     /// URL to bookmark
     pub url: String,
-    /// Title for the bookmark
-    pub title: String,
+    /// Title for the bookmark (optional, will be extracted from page if not provided)
+    pub title: Option<String>,
+    /// Skip metadata extraction and prompt for title if not provided
+    #[arg(long)]
+    pub no_fetch: bool,
 }
 
 #[derive(Args)]
@@ -61,7 +64,8 @@ mod tests {
         
         if let Ok(Cli { command: Commands::Add(args) }) = cli {
             assert_eq!(args.url, "https://example.com");
-            assert_eq!(args.title, "Example Title");
+            assert_eq!(args.title, Some("Example Title".to_string()));
+            assert_eq!(args.no_fetch, false);
         } else {
             panic!("Expected Add command");
         }
@@ -141,7 +145,49 @@ mod tests {
         assert!(cli.is_ok());
         
         if let Ok(Cli { command: Commands::Add(args) }) = cli {
-            assert_eq!(args.title, "Multi Word Title");
+            assert_eq!(args.title, Some("Multi Word Title".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_add_without_title() {
+        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com"]);
+        assert!(cli.is_ok());
+        
+        if let Ok(Cli { command: Commands::Add(args) }) = cli {
+            assert_eq!(args.url, "https://example.com");
+            assert_eq!(args.title, None);
+            assert_eq!(args.no_fetch, false);
+        } else {
+            panic!("Expected Add command");
+        }
+    }
+
+    #[test]
+    fn test_add_with_no_fetch_flag() {
+        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--no-fetch"]);
+        assert!(cli.is_ok());
+        
+        if let Ok(Cli { command: Commands::Add(args) }) = cli {
+            assert_eq!(args.url, "https://example.com");
+            assert_eq!(args.title, None);
+            assert_eq!(args.no_fetch, true);
+        } else {
+            panic!("Expected Add command");
+        }
+    }
+
+    #[test]
+    fn test_add_with_title_and_no_fetch_flag() {
+        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "Title", "--no-fetch"]);
+        assert!(cli.is_ok());
+        
+        if let Ok(Cli { command: Commands::Add(args) }) = cli {
+            assert_eq!(args.url, "https://example.com");
+            assert_eq!(args.title, Some("Title".to_string()));
+            assert_eq!(args.no_fetch, true);
+        } else {
+            panic!("Expected Add command");
         }
     }
 }
