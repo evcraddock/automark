@@ -48,7 +48,7 @@ impl ListCommand {
 #[async_trait::async_trait]
 impl CommandHandler for ListCommand {
     async fn execute(&self, repository: &mut dyn BookmarkRepository) -> BookmarkResult<()> {
-        let bookmarks = repository.find_all().await?;
+        let bookmarks = repository.find_all(None).await?;
         let output = self.format_bookmark_list(&bookmarks);
         print!("{}", output);
         Ok(())

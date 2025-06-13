@@ -12,7 +12,7 @@ impl DeleteCommand {
     }
     
     async fn find_bookmark_by_id(&self, repository: &mut dyn BookmarkRepository) -> BookmarkResult<Bookmark> {
-        let all_bookmarks = repository.find_all().await?;
+        let all_bookmarks = repository.find_all(None).await?;
         
         // Try exact match first
         for bookmark in &all_bookmarks {
@@ -96,7 +96,7 @@ mod tests {
         assert!(result.is_ok());
         
         // Verify bookmark was deleted
-        let remaining = repo.find_all().await.unwrap();
+        let remaining = repo.find_all(None).await.unwrap();
         assert!(remaining.is_empty());
     }
 
@@ -113,7 +113,7 @@ mod tests {
         assert!(result.is_ok());
         
         // Verify bookmark was deleted
-        let remaining = repo.find_all().await.unwrap();
+        let remaining = repo.find_all(None).await.unwrap();
         assert!(remaining.is_empty());
     }
 
@@ -142,7 +142,7 @@ mod tests {
         }
         
         // Verify no bookmarks were deleted
-        let remaining = repo.find_all().await.unwrap();
+        let remaining = repo.find_all(None).await.unwrap();
         assert_eq!(remaining.len(), 2);
     }
 
@@ -220,7 +220,7 @@ mod tests {
         assert!(result.is_ok());
         
         // Verify only the exact match was deleted
-        let remaining = repo.find_all().await.unwrap();
+        let remaining = repo.find_all(None).await.unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].title, "Partial Match");
     }
@@ -240,7 +240,7 @@ mod tests {
         assert!(result.is_ok());
         
         // Verify bookmark was deleted
-        let remaining = repo.find_all().await.unwrap();
+        let remaining = repo.find_all(None).await.unwrap();
         assert!(remaining.is_empty());
     }
 

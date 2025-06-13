@@ -144,7 +144,7 @@ mod tests {
         assert!(result.is_ok());
         
         // Verify bookmark was created in repository
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].url, "https://example.com");
         assert_eq!(bookmarks[0].title, "Example Site");
@@ -163,7 +163,7 @@ mod tests {
         assert!(matches!(result, Err(BookmarkError::InvalidUrl(_))));
         
         // Verify no bookmark was created
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert!(bookmarks.is_empty());
     }
 
@@ -181,7 +181,7 @@ mod tests {
         assert!(matches!(result, Err(BookmarkError::EmptyTitle)));
         
         // Verify no bookmark was created
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert!(bookmarks.is_empty());
     }
 
@@ -199,7 +199,7 @@ mod tests {
         assert!(matches!(result, Err(BookmarkError::EmptyTitle)));
         
         // Verify no bookmark was created
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert!(bookmarks.is_empty());
     }
 
@@ -238,7 +238,7 @@ mod tests {
         }
         
         // Verify all bookmarks were created
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 4);
     }
 
@@ -254,7 +254,7 @@ mod tests {
         let result = handle_add_command(args, &mut repo).await;
         assert!(result.is_ok());
         
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks[0].title, "Trimmed Title");
     }
 
@@ -271,7 +271,7 @@ mod tests {
         let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
         assert!(result.is_ok());
         
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].title, "Extracted Page Title");
         assert_eq!(bookmarks[0].url, "https://example.com");
@@ -290,7 +290,7 @@ mod tests {
         let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
         assert!(result.is_ok());
         
-        let bookmarks = repo.find_all().await.unwrap();
+        let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].title, "Manual Title");
     }
