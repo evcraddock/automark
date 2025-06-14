@@ -707,6 +707,12 @@ mod tests {
             tags: Some(vec!["programming".to_string()]),
             reading_status: Some(ReadingStatus::Completed),
             priority_range: Some((4, 5)),
+            bookmarked_since: None,
+            bookmarked_until: None,
+            published_since: None,
+            published_until: None,
+            sort_by: None,
+            sort_order: None,
         };
         
         let results = repo.find_all(Some(filters)).await.unwrap();

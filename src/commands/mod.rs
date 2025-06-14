@@ -7,10 +7,12 @@ use serde::{Serialize, Deserialize};
 pub mod add;
 pub mod list;
 pub mod delete;
+pub mod search;
 
 pub use add::handle_add_command;
 pub use list::handle_list_command;
 pub use delete::handle_delete_command;
+pub use search::handle_search_command;
 
 /// Output format for CLI responses
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,6 +163,8 @@ pub enum Commands {
     List,
     /// Delete a bookmark by ID
     Delete(DeleteArgs),
+    /// Search bookmarks with advanced filtering
+    Search(search::SearchArgs),
 }
 
 #[derive(Args)]
