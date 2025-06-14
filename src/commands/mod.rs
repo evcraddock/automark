@@ -8,11 +8,14 @@ pub mod add;
 pub mod list;
 pub mod delete;
 pub mod search;
+pub mod sync;
+pub mod auto_sync;
 
 pub use add::handle_add_command;
 pub use list::handle_list_command;
 pub use delete::handle_delete_command;
 pub use search::handle_search_command;
+pub use sync::handle_sync_command;
 
 /// Output format for CLI responses
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +125,7 @@ pub mod output {
             crate::types::BookmarkError::NotFound(_) => ("NOT_FOUND", error.to_string()),
             crate::types::BookmarkError::InvalidId(_) => ("INVALID_ID", error.to_string()),
             crate::types::BookmarkError::MetadataExtraction(_) => ("METADATA_EXTRACTION_ERROR", error.to_string()),
+            crate::types::BookmarkError::SyncError(_) => ("SYNC_ERROR", error.to_string()),
         }
     }
 }
@@ -165,9 +169,11 @@ pub enum Commands {
     Delete(DeleteArgs),
     /// Search bookmarks with advanced filtering
     Search(search::SearchArgs),
+    /// Sync bookmarks with a remote server
+    Sync(sync::SyncArgs),
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct AddArgs {
     /// URL to bookmark
     pub url: String,
@@ -178,7 +184,7 @@ pub struct AddArgs {
     pub no_fetch: bool,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct DeleteArgs {
     /// ID of bookmark to delete (can be partial ID)
     pub id: String,

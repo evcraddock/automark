@@ -2,7 +2,7 @@ pub mod bookmark;
 pub mod config;
 
 pub use bookmark::{Bookmark, Note, ReadingStatus, BookmarkFilters, ExtractedMetadata, SortBy, SortDirection};
-pub use config::{Config, StorageConfig, ConfigError, ConfigResult, expand_path};
+pub use config::{Config, StorageConfig, SyncConfig, ConfigError, ConfigResult, expand_path};
 
 use thiserror::Error;
 
@@ -30,6 +30,8 @@ pub enum BookmarkError {
     InvalidId(String),
     #[error("Metadata extraction failed: {0}")]
     MetadataExtraction(#[from] ExtractorError),
+    #[error("Sync failed: {0}")]
+    SyncError(String),
 }
 
 pub type BookmarkResult<T> = Result<T, BookmarkError>;
