@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::types::{Bookmark, BookmarkResult, BookmarkFilters};
 #[cfg(test)]
 use crate::types::BookmarkError;
