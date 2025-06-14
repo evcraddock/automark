@@ -560,22 +560,6 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
         Err(BookmarkError::NotFound(format!("Note {} not found", note_id)))
     }
     
-    async fn get_sync_state(&self, peer_id: &str) -> BookmarkResult<Option<Vec<u8>>> {
-        // Return the sync state for the given peer if it exists
-        Ok(self.sync_states.get(peer_id).map(|state| state.encode()))
-    }
-    
-    async fn save_sync_state(&mut self, peer_id: &str, state: Vec<u8>) -> BookmarkResult<()> {
-        // Decode and save the sync state
-        match SyncState::decode(&state) {
-            Ok(sync_state) => {
-                self.sync_states.insert(peer_id.to_string(), sync_state);
-                Ok(())
-            }
-            Err(e) => Err(BookmarkError::SyncError(format!("Failed to decode sync state: {}", e)))
-        }
-    }
-    
     async fn generate_sync_message(&mut self, peer_id: &str) -> BookmarkResult<Vec<u8>> {
         // Get or create sync state for this peer
         let sync_state = self.sync_states
