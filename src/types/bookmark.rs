@@ -99,11 +99,13 @@ impl Bookmark {
         })
     }
 
+    #[allow(dead_code)]
     pub fn with_tags(mut self, tags: Vec<String>) -> Self {
         self.tags = tags.into_iter().map(|tag| tag.to_lowercase()).collect();
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_priority(mut self, priority: u8) -> BookmarkResult<Self> {
         if !(1..=5).contains(&priority) {
             return Err(BookmarkError::InvalidId(format!("Priority must be between 1 and 5, got {}", priority)));
@@ -112,6 +114,7 @@ impl Bookmark {
         Ok(self)
     }
 
+    #[allow(dead_code)]
     pub fn add_note(&mut self, content: &str) -> String {
         let note = Note::new(content);
         let note_id = note.id.clone();
@@ -119,6 +122,7 @@ impl Bookmark {
         note_id
     }
 
+    #[allow(dead_code)]
     pub fn remove_note(&mut self, note_id: &str) -> bool {
         if let Some(pos) = self.notes.iter().position(|n| n.id == note_id) {
             self.notes.remove(pos);

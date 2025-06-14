@@ -16,6 +16,7 @@ pub struct MockMetadataExtractor {
 
 #[cfg(test)]
 impl MockMetadataExtractor {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             should_fail: false,

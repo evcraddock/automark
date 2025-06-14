@@ -6,11 +6,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("Configuration file error: {0}")]
-    FileError(String),
+    File(String),
     #[error("Invalid configuration: {0}")]
-    ValidationError(String),
+    Validation(String),
     #[error("Path error: {0}")]
-    PathError(String),
+    Path(String),
 }
 
 pub type ConfigResult<T> = Result<T, ConfigError>;
@@ -97,6 +97,7 @@ impl Default for MetadataConfig {
 
 impl Config {
     /// Create a new configuration with default values
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
@@ -113,7 +114,7 @@ impl Config {
         
         // Check if path is absolute after expansion
         if !data_path.is_absolute() {
-            return Err(ConfigError::ValidationError(
+            return Err(ConfigError::Validation(
                 format!("Data directory must be an absolute path: {}", data_path.display())
             ));
         }
@@ -172,7 +173,7 @@ retry_delay_ms = 1000
 pub fn expand_path(path: &str) -> ConfigResult<PathBuf> {
     if path.starts_with('~') {
         let home_dir = dirs::home_dir()
-            .ok_or_else(|| ConfigError::PathError("Could not determine home directory".to_string()))?;
+            .ok_or_else(|| ConfigError::Path("Could not determine home directory".to_string()))?;
         
         if path == "~" {
             Ok(home_dir)
@@ -181,7 +182,7 @@ pub fn expand_path(path: &str) -> ConfigResult<PathBuf> {
             Ok(home_dir.join(relative_path))
         } else {
             // Handle cases like ~username (not supported)
-            Err(ConfigError::PathError(
+            Err(ConfigError::Path(
                 format!("Unsupported path format: {}. Only ~ and ~/ are supported.", path)
             ))
         }
@@ -265,11 +266,11 @@ mod tests {
         let result = expand_path("~username/path");
         assert!(result.is_err());
         match result {
-            Err(ConfigError::PathError(msg)) => {
+            Err(ConfigError::Path(msg)) => {
                 assert!(msg.contains("Unsupported path format"));
                 assert!(msg.contains("~username/path"));
             }
-            _ => panic!("Expected PathError"),
+            _ => panic!("Expected Path error"),
         }
     }
 
@@ -298,10 +299,10 @@ mod tests {
         let result = config.validate();
         assert!(result.is_err());
         match result {
-            Err(ConfigError::ValidationError(msg)) => {
+            Err(ConfigError::Validation(msg)) => {
                 assert!(msg.contains("must be an absolute path"));
             }
-            _ => panic!("Expected ValidationError"),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -355,13 +356,13 @@ mod tests {
 
     #[test]
     fn test_config_errors_display() {
-        let file_error = ConfigError::FileError("test error".to_string());
+        let file_error = ConfigError::File("test error".to_string());
         assert_eq!(file_error.to_string(), "Configuration file error: test error");
         
-        let validation_error = ConfigError::ValidationError("invalid setting".to_string());
+        let validation_error = ConfigError::Validation("invalid setting".to_string());
         assert_eq!(validation_error.to_string(), "Invalid configuration: invalid setting");
         
-        let path_error = ConfigError::PathError("bad path".to_string());
+        let path_error = ConfigError::Path("bad path".to_string());
         assert_eq!(path_error.to_string(), "Path error: bad path");
     }
 }

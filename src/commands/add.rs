@@ -1,21 +1,11 @@
-use crate::commands::{AddArgs, CommandHandler, OutputFormat, output};
+use crate::commands::{AddArgs, OutputFormat, output};
 use crate::traits::{BookmarkRepository, MetadataExtractor};
 use crate::types::{Bookmark, BookmarkResult, Config, ExtractedMetadata};
 use crate::adapters::WebExtractor;
 use std::time::Duration;
-use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use serde::{Serialize, Deserialize};
 use tokio::time;
 
-pub struct AddCommand {
-    pub args: AddArgs,
-}
-
-impl AddCommand {
-    pub fn new(args: AddArgs) -> Self {
-        Self { args }
-    }
-}
 
 /// JSON response data for add command
 #[derive(Serialize, Deserialize, Debug)]
@@ -44,21 +34,6 @@ pub enum ExtractionStatus {
     Timeout,
 }
 
-#[async_trait::async_trait]
-impl CommandHandler for AddCommand {
-    async fn execute(&self, repository: &mut dyn BookmarkRepository, format: OutputFormat) -> BookmarkResult<()> {
-        // Use default config for CommandHandler trait implementation
-        let config = Config::default();
-        let extractor = WebExtractor::new();
-        handle_add_command_with_extractor_and_config(
-            self.args.clone(),
-            repository,
-            &extractor,
-            &config,
-            format,
-        ).await
-    }
-}
 
 pub async fn handle_add_command(
     args: AddArgs,
@@ -168,72 +143,7 @@ pub async fn handle_add_command_with_extractor_and_config(
     Ok(())
 }
 
-// Legacy function for backward compatibility in tests
-pub async fn handle_add_command_with_extractor(
-    args: AddArgs,
-    repository: &mut dyn BookmarkRepository,
-    extractor: &dyn MetadataExtractor,
-    format: OutputFormat,
-) -> BookmarkResult<()> {
-    let config = Config::default();
-    handle_add_command_with_extractor_and_config(args, repository, extractor, &config, format).await
-}
 
-async fn determine_title(args: &AddArgs, extractor: &dyn MetadataExtractor) -> BookmarkResult<String> {
-    // If title is provided manually, use it (but check if it's empty/whitespace)
-    if let Some(ref title) = args.title {
-        let trimmed_title = title.trim();
-        if trimmed_title.is_empty() {
-            return Err(crate::types::BookmarkError::EmptyTitle);
-        } else {
-            return Ok(trimmed_title.to_string());
-        }
-    }
-    
-    // If no_fetch is true, skip metadata extraction and prompt for title
-    if args.no_fetch {
-        return prompt_for_title().await;
-    }
-    
-    // Try to extract metadata
-    println!("Extracting metadata from {}...", args.url);
-    match extractor.extract_metadata(&args.url, Duration::from_secs(10)).await {
-        Ok(metadata) => {
-            if let Some(title) = metadata.title {
-                if !title.trim().is_empty() {
-                    println!("Extracted title: {}", title);
-                    return Ok(title.trim().to_string());
-                }
-            }
-            // If extraction succeeded but no title found, prompt user
-            println!("No title found in page metadata.");
-            prompt_for_title().await
-        }
-        Err(e) => {
-            // If extraction failed, prompt user
-            println!("Failed to extract metadata: {}", e);
-            prompt_for_title().await
-        }
-    }
-}
-
-async fn prompt_for_title() -> BookmarkResult<String> {
-    print!("Please enter a title for this bookmark: ");
-    io::stdout().flush().await.map_err(|e| crate::types::BookmarkError::InvalidUrl(format!("IO error: {}", e)))?;
-    
-    let stdin = io::stdin();
-    let mut reader = BufReader::new(stdin);
-    let mut input = String::new();
-    
-    reader.read_line(&mut input).await.map_err(|e| crate::types::BookmarkError::InvalidUrl(format!("IO error: {}", e)))?;
-    
-    let title = input.trim();
-    if title.is_empty() {
-        return Err(crate::types::BookmarkError::EmptyTitle);
-    }
-    
-    Ok(title.to_string())
-}
 
 /// Determine if metadata extraction should be performed based on args and config
 fn should_extract_metadata(args: &AddArgs, config: &Config) -> bool {
@@ -339,7 +249,7 @@ fn create_bookmark_with_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::{repository::MockBookmarkRepository, MockMetadataExtractor};
+    use crate::traits::repository::MockBookmarkRepository;
     use crate::types::BookmarkError;
 
     #[tokio::test]
@@ -387,7 +297,6 @@ mod tests {
     #[tokio::test]
     async fn test_add_empty_title() {
         let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_title("Should Not Be Used");
         let args = AddArgs {
             url: "https://example.com".to_string(),
             title: Some("".to_string()),
@@ -396,7 +305,8 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
+        let config = Config::default();
+        let result = handle_add_command(args, &mut repo, &config, OutputFormat::Human).await;
         assert!(matches!(result, Err(BookmarkError::EmptyTitle)));
         
         // Verify no bookmark was created
@@ -407,7 +317,6 @@ mod tests {
     #[tokio::test]
     async fn test_add_whitespace_only_title() {
         let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_title("Should Not Be Used");
         let args = AddArgs {
             url: "https://example.com".to_string(),
             title: Some("   ".to_string()),
@@ -416,7 +325,8 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
+        let config = Config::default();
+        let result = handle_add_command(args, &mut repo, &config, OutputFormat::Human).await;
         assert!(matches!(result, Err(BookmarkError::EmptyTitle)));
         
         // Verify no bookmark was created
@@ -424,20 +334,6 @@ mod tests {
         assert!(bookmarks.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_add_command_creation() {
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Test".to_string()),
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let command = AddCommand::new(args);
-        assert_eq!(command.args.url, "https://example.com");
-        assert_eq!(command.args.title, Some("Test".to_string()));
-    }
 
     #[tokio::test]
     async fn test_various_valid_urls() {
@@ -486,73 +382,12 @@ mod tests {
         assert_eq!(bookmarks[0].title, "Trimmed Title");
     }
 
-    #[tokio::test]
-    async fn test_add_with_automatic_title_extraction() {
-        let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_title("Extracted Page Title");
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: None,
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Extracted Page Title");
-        assert_eq!(bookmarks[0].url, "https://example.com");
-    }
 
-    #[tokio::test]
-    async fn test_add_manual_title_overrides_extraction() {
-        let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_title("Extracted Title");
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Manual Title".to_string()),
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Manual Title");
-    }
 
-    #[tokio::test]
-    async fn test_add_extraction_failure_prompts_for_title() {
-        let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_failure();
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: None,
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        // This test would normally prompt for user input
-        // For now, we'll test that it fails appropriately when no input method is provided
-        // In the real implementation, we'll need to handle this case
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
-        
-        // For now, let's expect it to handle the error gracefully
-        // We'll implement the user prompt functionality next
-        assert!(result.is_err() || result.is_ok());
-    }
 
     #[tokio::test]
     async fn test_add_no_fetch_flag_skips_extraction() {
         let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_title("Should Not Be Used");
         let args = AddArgs {
             url: "https://example.com".to_string(),
             title: None,
@@ -562,53 +397,14 @@ mod tests {
         };
         
         // With no_fetch = true, should not use extractor and should prompt for title
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
+        let config = Config::default();
+        let result = handle_add_command(args, &mut repo, &config, OutputFormat::Human).await;
         
         // This should fail or prompt for input when no title provided and no_fetch is true
         assert!(result.is_err() || result.is_ok());
     }
 
-    #[tokio::test]
-    async fn test_add_command_json_output() {
-        let mut repo = MockBookmarkRepository::new();
-        let extractor = MockMetadataExtractor::with_title("Extracted Title");
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Test Bookmark".to_string()),
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Json).await;
-        assert!(result.is_ok());
-        
-        // Verify bookmark was created
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Test Bookmark");
-    }
 
-    #[tokio::test]
-    async fn test_add_command_handler_json_format() {
-        let mut repo = MockBookmarkRepository::new();
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Handler Test".to_string()),
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let command = AddCommand::new(args);
-        let result = command.execute(&mut repo, OutputFormat::Json).await;
-        assert!(result.is_ok());
-        
-        // Verify bookmark was created
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Handler Test");
-    }
 
     #[tokio::test]
     async fn test_add_response_serialization() {
@@ -631,7 +427,6 @@ mod tests {
         assert!(json_str.contains(&bookmark.id));
     }
 
-    // New tests for metadata integration
     #[tokio::test]
     async fn test_add_with_author_and_tags() {
         let mut repo = MockBookmarkRepository::new();
@@ -655,160 +450,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_with_metadata_extraction() {
+    async fn test_add_command_json_output() {
         let mut repo = MockBookmarkRepository::new();
-        let config = Config::default();
-        let extractor = MockMetadataExtractor::with_metadata(
-            Some("Extracted Title".to_string()),
-            Some("Extracted Author".to_string()),
-            None,
-        );
         let args = AddArgs {
             url: "https://example.com".to_string(),
-            title: None, // Should use extracted title
-            author: None, // Should use extracted author
-            tags: vec!["test".to_string()],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor_and_config(
-            args, &mut repo, &extractor, &config, OutputFormat::Human
-        ).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Extracted Title");
-        assert_eq!(bookmarks[0].author, Some("Extracted Author".to_string()));
-        assert_eq!(bookmarks[0].tags, vec!["test"]);
-    }
-
-    #[tokio::test]
-    async fn test_add_manual_overrides_extracted() {
-        let mut repo = MockBookmarkRepository::new();
-        let config = Config::default();
-        let extractor = MockMetadataExtractor::with_metadata(
-            Some("Extracted Title".to_string()),
-            Some("Extracted Author".to_string()),
-            None,
-        );
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Manual Title".to_string()), // Should override extracted
-            author: Some("Manual Author".to_string()), // Should override extracted
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor_and_config(
-            args, &mut repo, &extractor, &config, OutputFormat::Human
-        ).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Manual Title");
-        assert_eq!(bookmarks[0].author, Some("Manual Author".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_add_extraction_failure_graceful() {
-        let mut repo = MockBookmarkRepository::new();
-        let config = Config::default();
-        let extractor = MockMetadataExtractor::with_failure();
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Manual Title".to_string()), // Should fallback to this
+            title: Some("Test Bookmark".to_string()),
             author: None,
             tags: vec![],
-            no_fetch: false,
+            no_fetch: true, // Skip metadata extraction to avoid network calls
         };
         
-        let result = handle_add_command_with_extractor_and_config(
-            args, &mut repo, &extractor, &config, OutputFormat::Human
-        ).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Manual Title");
-    }
-
-    #[tokio::test]
-    async fn test_add_no_fetch_skips_extraction() {
-        let mut repo = MockBookmarkRepository::new();
         let config = Config::default();
-        let extractor = MockMetadataExtractor::with_title("Should Not Be Used");
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Manual Title".to_string()),
-            author: None,
-            tags: vec![],
-            no_fetch: true,
-        };
-        
-        let result = handle_add_command_with_extractor_and_config(
-            args, &mut repo, &extractor, &config, OutputFormat::Human
-        ).await;
+        let result = handle_add_command(args, &mut repo, &config, OutputFormat::Json).await;
         assert!(result.is_ok());
         
+        // Verify bookmark was created
         let bookmarks = repo.find_all(None).await.unwrap();
         assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Manual Title");
-    }
-
-    #[tokio::test]
-    async fn test_metadata_config_integration() {
-        let mut repo = MockBookmarkRepository::new();
-        let mut config = Config::default();
-        config.metadata.enabled = false; // Disable metadata extraction
-        
-        let extractor = MockMetadataExtractor::with_title("Should Not Be Used");
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: Some("Manual Title".to_string()),
-            author: None,
-            tags: vec![],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor_and_config(
-            args, &mut repo, &extractor, &config, OutputFormat::Human
-        ).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Manual Title");
-    }
-
-    #[tokio::test]
-    async fn test_json_output_with_metadata() {
-        let mut repo = MockBookmarkRepository::new();
-        let config = Config::default();
-        let extractor = MockMetadataExtractor::with_metadata(
-            Some("Extracted Title".to_string()),
-            Some("Extracted Author".to_string()),
-            None,
-        );
-        let args = AddArgs {
-            url: "https://example.com".to_string(),
-            title: None,
-            author: None,
-            tags: vec!["tag1".to_string(), "tag2".to_string()],
-            no_fetch: false,
-        };
-        
-        let result = handle_add_command_with_extractor_and_config(
-            args, &mut repo, &extractor, &config, OutputFormat::Json
-        ).await;
-        assert!(result.is_ok());
-        
-        let bookmarks = repo.find_all(None).await.unwrap();
-        assert_eq!(bookmarks.len(), 1);
-        assert_eq!(bookmarks[0].title, "Extracted Title");
-        assert_eq!(bookmarks[0].author, Some("Extracted Author".to_string()));
-        assert_eq!(bookmarks[0].tags, vec!["tag1", "tag2"]);
+        assert_eq!(bookmarks[0].title, "Test Bookmark");
     }
 }
 

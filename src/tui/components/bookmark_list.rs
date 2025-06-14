@@ -54,6 +54,7 @@ pub fn render_bookmark_list(
 }
 
 /// Get the display text for a bookmark in the list
+#[allow(dead_code)]
 pub fn format_bookmark_item(bookmark: &Bookmark, index: usize, compact: bool) -> String {
     if compact {
         format!("{:<3} {}", index + 1, bookmark.title)

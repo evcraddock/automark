@@ -55,6 +55,7 @@ pub async fn auto_sync_if_enabled(
 }
 
 /// Quietly sync without showing output (for background sync)
+#[allow(dead_code)]
 pub async fn quiet_sync(
     repository: &mut dyn BookmarkRepository,
     config: &Config,

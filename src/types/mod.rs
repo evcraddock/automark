@@ -11,6 +11,7 @@ pub enum ExtractorError {
     #[error("Network request failed: {0}")]
     NetworkError(String),
     #[error("Failed to parse HTML: {0}")]
+    #[allow(dead_code)]
     ParseError(String),
     #[error("Request timed out")]
     Timeout,

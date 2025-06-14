@@ -42,6 +42,7 @@ fn get_key_hints(mode: &ViewMode) -> &'static str {
 }
 
 /// Render a simple status message
+#[allow(dead_code)]
 pub fn render_status_message(f: &mut Frame, area: Rect, message: &str, color: Color) {
     let status = Paragraph::new(message)
         .style(Style::default().fg(color))
@@ -50,6 +51,7 @@ pub fn render_status_message(f: &mut Frame, area: Rect, message: &str, color: Co
 }
 
 /// Render bookmark count and filter info
+#[allow(dead_code)]
 pub fn render_bookmark_info(f: &mut Frame, area: Rect, total_count: usize, filtered_count: Option<usize>) {
     let info_text = if let Some(filtered) = filtered_count {
         format!("Showing {} of {} bookmarks", filtered, total_count)

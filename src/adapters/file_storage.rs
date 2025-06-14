@@ -19,7 +19,7 @@ impl FileStorageManager {
     /// Get the configuration file path
     pub fn get_config_file_path() -> ConfigResult<PathBuf> {
         let config_dir = dirs::config_dir()
-            .ok_or_else(|| ConfigError::PathError("Could not determine config directory".to_string()))?;
+            .ok_or_else(|| ConfigError::Path("Could not determine config directory".to_string()))?;
         
         let automark_config_dir = config_dir.join("automark");
         Ok(automark_config_dir.join("config.toml"))
@@ -28,10 +28,10 @@ impl FileStorageManager {
     /// Load configuration from a specific file
     fn load_config_from_file(path: &Path) -> ConfigResult<Config> {
         let content = fs::read_to_string(path)
-            .map_err(|e| ConfigError::FileError(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| ConfigError::File(format!("Failed to read config file: {}", e)))?;
         
         let config: Config = toml::from_str(&content)
-            .map_err(|e| ConfigError::FileError(format!("Failed to parse config file: {}", e)))?;
+            .map_err(|e| ConfigError::File(format!("Failed to parse config file: {}", e)))?;
         
         // Validate the loaded configuration
         config.validate()?;
@@ -46,13 +46,13 @@ impl FileStorageManager {
         // Create parent directories if they don't exist
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| ConfigError::FileError(format!("Failed to create config directory: {}", e)))?;
+                .map_err(|e| ConfigError::File(format!("Failed to create config directory: {}", e)))?;
         }
         
         // Write default configuration file with comments
         let content = Config::default_toml_content();
         fs::write(config_path, content)
-            .map_err(|e| ConfigError::FileError(format!("Failed to write default config file: {}", e)))?;
+            .map_err(|e| ConfigError::File(format!("Failed to write default config file: {}", e)))?;
         
         Ok(config)
     }
@@ -63,7 +63,7 @@ impl FileStorageManager {
         
         if !data_path.exists() {
             fs::create_dir_all(&data_path)
-                .map_err(|e| ConfigError::FileError(format!("Failed to create data directory: {}", e)))?;
+                .map_err(|e| ConfigError::File(format!("Failed to create data directory: {}", e)))?;
         }
         
         // Verify the directory is accessible
@@ -76,13 +76,13 @@ impl FileStorageManager {
     fn verify_directory_access(path: &Path) -> ConfigResult<()> {
         // Check if directory exists and is actually a directory
         if !path.exists() {
-            return Err(ConfigError::ValidationError(
+            return Err(ConfigError::Validation(
                 format!("Data directory does not exist: {}", path.display())
             ));
         }
         
         if !path.is_dir() {
-            return Err(ConfigError::ValidationError(
+            return Err(ConfigError::Validation(
                 format!("Data path is not a directory: {}", path.display())
             ));
         }
@@ -95,7 +95,7 @@ impl FileStorageManager {
                 let _ = fs::remove_file(&test_file);
                 Ok(())
             }
-            Err(e) => Err(ConfigError::ValidationError(
+            Err(e) => Err(ConfigError::Validation(
                 format!("Data directory is not writable: {}", e)
             )),
         }
@@ -150,10 +150,10 @@ data_dir = "/tmp/test"
         assert!(result.is_err());
         
         match result {
-            Err(ConfigError::FileError(msg)) => {
+            Err(ConfigError::File(msg)) => {
                 assert!(msg.contains("Failed to parse config file"));
             }
-            _ => panic!("Expected FileError"),
+            _ => panic!("Expected File error"),
         }
     }
 
@@ -163,10 +163,10 @@ data_dir = "/tmp/test"
         assert!(result.is_err());
         
         match result {
-            Err(ConfigError::FileError(msg)) => {
+            Err(ConfigError::File(msg)) => {
                 assert!(msg.contains("Failed to read config file"));
             }
-            _ => panic!("Expected FileError"),
+            _ => panic!("Expected File error"),
         }
     }
 
@@ -183,10 +183,10 @@ data_dir = "relative/path"
         assert!(result.is_err());
         
         match result {
-            Err(ConfigError::ValidationError(msg)) => {
+            Err(ConfigError::Validation(msg)) => {
                 assert!(msg.contains("must be an absolute path"));
             }
-            _ => panic!("Expected ValidationError"),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -268,10 +268,10 @@ data_dir = "relative/path"
         assert!(result.is_err());
         
         match result {
-            Err(ConfigError::ValidationError(msg)) => {
+            Err(ConfigError::Validation(msg)) => {
                 assert!(msg.contains("does not exist"));
             }
-            _ => panic!("Expected ValidationError"),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -283,10 +283,10 @@ data_dir = "relative/path"
         assert!(result.is_err());
         
         match result {
-            Err(ConfigError::ValidationError(msg)) => {
+            Err(ConfigError::Validation(msg)) => {
                 assert!(msg.contains("is not a directory"));
             }
-            _ => panic!("Expected ValidationError"),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -304,10 +304,10 @@ data_dir = "relative/path"
         assert!(result.is_err());
         
         match result {
-            Err(ConfigError::ValidationError(msg)) => {
+            Err(ConfigError::Validation(msg)) => {
                 assert!(msg.contains("not writable"));
             }
-            _ => panic!("Expected ValidationError"),
+            _ => panic!("Expected Validation error"),
         }
         
         // Restore permissions for cleanup
