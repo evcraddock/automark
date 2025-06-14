@@ -10,12 +10,14 @@ pub mod delete;
 pub mod search;
 pub mod sync;
 pub mod auto_sync;
+pub mod tui;
 
 pub use add::handle_add_command;
 pub use list::handle_list_command;
 pub use delete::handle_delete_command;
 pub use search::handle_search_command;
 pub use sync::handle_sync_command;
+pub use tui::handle_tui_command;
 
 /// Output format for CLI responses
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +128,7 @@ pub mod output {
             crate::types::BookmarkError::InvalidId(_) => ("INVALID_ID", error.to_string()),
             crate::types::BookmarkError::MetadataExtraction(_) => ("METADATA_EXTRACTION_ERROR", error.to_string()),
             crate::types::BookmarkError::SyncError(_) => ("SYNC_ERROR", error.to_string()),
+            crate::types::BookmarkError::TerminalError(_) => ("TERMINAL_ERROR", error.to_string()),
         }
     }
 }
@@ -171,6 +174,8 @@ pub enum Commands {
     Search(search::SearchArgs),
     /// Sync bookmarks with a remote server
     Sync(sync::SyncArgs),
+    /// Start the interactive TUI
+    Tui(tui::TuiArgs),
 }
 
 #[derive(Args, Clone)]
