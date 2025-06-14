@@ -1,6 +1,8 @@
 pub mod bookmark;
+pub mod config;
 
 pub use bookmark::{Bookmark, Note, ReadingStatus, BookmarkFilters, ExtractedMetadata, SortBy, SortDirection};
+pub use config::{Config, StorageConfig, ConfigError, ConfigResult, expand_path};
 
 use thiserror::Error;
 
