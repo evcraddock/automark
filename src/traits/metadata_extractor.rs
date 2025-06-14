@@ -16,37 +16,6 @@ pub struct MockMetadataExtractor {
 
 #[cfg(test)]
 impl MockMetadataExtractor {
-    pub fn new() -> Self {
-        Self {
-            should_fail: false,
-            extracted_title: Some("Extracted Title".to_string()),
-            extracted_author: Some("Extracted Author".to_string()),
-        }
-    }
-
-    pub fn with_failure() -> Self {
-        Self {
-            should_fail: true,
-            extracted_title: None,
-            extracted_author: None,
-        }
-    }
-
-    pub fn with_title(title: &str) -> Self {
-        Self {
-            should_fail: false,
-            extracted_title: Some(title.to_string()),
-            extracted_author: None,
-        }
-    }
-
-    pub fn with_metadata(title: Option<String>, author: Option<String>, _publish_date: Option<chrono::DateTime<chrono::Utc>>) -> Self {
-        Self {
-            should_fail: false,
-            extracted_title: title,
-            extracted_author: author,
-        }
-    }
 }
 
 #[cfg(test)]

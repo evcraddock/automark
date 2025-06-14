@@ -54,28 +54,6 @@ pub async fn auto_sync_if_enabled(
     }
 }
 
-/// Quietly sync without showing output (for background sync)
-pub async fn quiet_sync(
-    repository: &mut dyn BookmarkRepository,
-    config: &Config,
-) -> BookmarkResult<bool> {
-    if !config.sync.enabled {
-        return Ok(false);
-    }
-    
-    let sync_args = SyncArgs {
-        server: None,
-        document_id: None,
-        dry_run: false,
-        timeout: None,
-    };
-    
-    // Use JSON format to suppress human output
-    match handle_sync_command(&sync_args, repository, config, OutputFormat::Json).await {
-        Ok(()) => Ok(true),
-        Err(_) => Ok(false), // Failed but don't propagate error
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -104,14 +82,4 @@ mod tests {
         assert!(result.is_ok());
     }
     
-    #[tokio::test]
-    async fn test_quiet_sync_disabled() {
-        let mut repo = MockBookmarkRepository::new();
-        let mut config = Config::default();
-        config.sync.enabled = false;
-        
-        let result = quiet_sync(&mut repo, &config).await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap()); // Should return false when disabled
-    }
 }

@@ -19,9 +19,6 @@ impl WebExtractor {
         }
     }
 
-    pub fn with_client(client: Client) -> Self {
-        Self { client }
-    }
 }
 
 #[async_trait]

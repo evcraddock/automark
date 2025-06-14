@@ -1,4 +1,7 @@
+#![allow(dead_code)]
 use crate::types::{Bookmark, BookmarkResult, BookmarkFilters};
+#[cfg(test)]
+use crate::types::BookmarkError;
 use async_trait::async_trait;
 
 /// Repository trait for managing bookmarks with CRDT support
@@ -113,22 +116,6 @@ pub trait BookmarkRepository: Send + Sync {
     /// # CRDT Behavior
     /// Marks note as deleted using tombstone in CRDT list
     async fn remove_note(&mut self, bookmark_id: &str, note_id: &str) -> BookmarkResult<()>;
-    
-    /// Get sync state for a peer
-    /// 
-    /// # Arguments
-    /// * `peer_id` - The ID of the peer to get sync state for
-    /// 
-    /// # Returns
-    /// The sync state as bytes, or None if no state exists
-    async fn get_sync_state(&self, peer_id: &str) -> BookmarkResult<Option<Vec<u8>>>;
-    
-    /// Save sync state for a peer
-    /// 
-    /// # Arguments
-    /// * `peer_id` - The ID of the peer to save sync state for
-    /// * `state` - The sync state as bytes
-    async fn save_sync_state(&mut self, peer_id: &str, state: Vec<u8>) -> BookmarkResult<()>;
     
     /// Generate sync message for a peer
     /// 
@@ -298,16 +285,6 @@ impl BookmarkRepository for MockBookmarkRepository {
         } else {
             Err(BookmarkError::NotFound(bookmark_id.to_string()))
         }
-    }
-    
-    async fn get_sync_state(&self, _peer_id: &str) -> BookmarkResult<Option<Vec<u8>>> {
-        // Mock implementation - no sync state stored
-        Ok(None)
-    }
-    
-    async fn save_sync_state(&mut self, _peer_id: &str, _state: Vec<u8>) -> BookmarkResult<()> {
-        // Mock implementation - ignore sync state
-        Ok(())
     }
     
     async fn generate_sync_message(&mut self, _peer_id: &str) -> BookmarkResult<Vec<u8>> {

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -33,12 +34,6 @@ pub enum ReadingStatus {
     Completed,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SortOrder {
-    PublishDate,
-    BookmarkedDate,
-    Title,
-}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BookmarkFilters {
