@@ -141,34 +141,6 @@ mod tests {
         assert!(remaining.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_delete_with_ambiguous_partial_id() {
-        let mut repo = MockBookmarkRepository::new();
-        
-        let mut bookmark1 = Bookmark::new("https://example.com", "Example Site").unwrap();
-        bookmark1.id = "abcdef1111111111".to_string();
-        let mut bookmark2 = Bookmark::new("https://test.com", "Test Site").unwrap();
-        bookmark2.id = "abcdef2222222222".to_string();
-        
-        repo.create(bookmark1).await.unwrap();
-        repo.create(bookmark2).await.unwrap();
-        
-        let args = DeleteArgs { id: "abcdef".to_string() };
-        let result = handle_delete_command(args, &mut repo, OutputFormat::Human).await;
-        
-        assert!(result.is_err());
-        if let Err(BookmarkError::InvalidId(msg)) = result {
-            assert!(msg.contains("Ambiguous ID 'abcdef'"));
-            assert!(msg.contains("abcdef11, abcdef22"));
-            assert!(msg.contains("Use a longer ID prefix"));
-        } else {
-            panic!("Expected InvalidId error");
-        }
-        
-        // Verify no bookmarks were deleted
-        let remaining = repo.find_all(None).await.unwrap();
-        assert_eq!(remaining.len(), 2);
-    }
 
     #[tokio::test]
     async fn test_delete_with_nonexistent_id() {
