@@ -5,15 +5,15 @@ use futures_util::{StreamExt, SinkExt};
 use uuid::Uuid;
 use std::time::Duration;
 use crate::traits::BookmarkRepository;
-use crate::types::{BookmarkResult, BookmarkError};
+use crate::types::{BookmarkResult, BookmarkError, Config};
 use super::{OutputFormat, output};
 
 /// Arguments for the sync command
 #[derive(Args, Debug)]
 pub struct SyncArgs {
-    /// WebSocket sync server URL
-    #[arg(long, default_value = "wss://sync.automerge.org")]
-    pub server: String,
+    /// WebSocket sync server URL (overrides config)
+    #[arg(long)]
+    pub server: Option<String>,
     
     /// Document ID to sync (if not provided, syncs the main bookmark document)
     #[arg(long)]
@@ -23,9 +23,9 @@ pub struct SyncArgs {
     #[arg(long)]
     pub dry_run: bool,
     
-    /// Connection timeout in seconds
-    #[arg(long, default_value = "30")]
-    pub timeout: u64,
+    /// Connection timeout in seconds (overrides config)
+    #[arg(long)]
+    pub timeout: Option<u64>,
 }
 
 /// Sync command response
@@ -92,10 +92,22 @@ pub enum ProtocolMessage {
 
 pub async fn handle_sync_command(
     args: &SyncArgs,
-    _repository: &mut dyn BookmarkRepository,
+    repository: &mut dyn BookmarkRepository,
+    config: &Config,
     format: OutputFormat,
 ) -> BookmarkResult<()> {
+    // Check if sync is enabled
+    if !config.sync.enabled {
+        let error = BookmarkError::SyncError("Sync is disabled in configuration".to_string());
+        output::print_error(format, &error);
+        return Err(error);
+    }
+    
     let start_time = std::time::Instant::now();
+    
+    // Use config values with command-line overrides
+    let server_url = args.server.as_ref().unwrap_or(&config.sync.server_url);
+    let timeout_secs = args.timeout.unwrap_or(config.sync.timeout_secs);
     
     // Generate ephemeral peer ID
     let peer_id = Uuid::new_v4().to_string();
@@ -103,7 +115,7 @@ pub async fn handle_sync_command(
         .unwrap_or_else(|| "bookmarks".to_string());
     
     if format == OutputFormat::Human {
-        println!("🔄 Connecting to sync server: {}", args.server);
+        println!("🔄 Connecting to sync server: {}", server_url);
         println!("📄 Document ID: {}", document_id);
         if args.dry_run {
             println!("⚠️  Dry run mode - changes will not be saved");
@@ -111,7 +123,7 @@ pub async fn handle_sync_command(
     }
     
     // Connect to WebSocket server
-    let (ws_stream, _) = match connect_async(&args.server).await {
+    let (ws_stream, _) = match connect_async(server_url).await {
         Ok(result) => result,
         Err(e) => {
             let error = BookmarkError::SyncError(format!("Failed to connect to sync server: {}", e));
@@ -141,7 +153,7 @@ pub async fn handle_sync_command(
     let mut _remote_peer_id = None;
     
     // Set up timeout
-    let timeout = Duration::from_secs(args.timeout);
+    let timeout = Duration::from_secs(timeout_secs);
     let timeout_future = tokio::time::sleep(timeout);
     tokio::pin!(timeout_future);
     
@@ -164,19 +176,28 @@ pub async fn handle_sync_command(
                                     println!("🤝 Connected to peer: {} (protocol v{})", sender_id, selected_protocol_version);
                                 }
                                 
-                                // Send sync request for our document
-                                if let Some(ref remote_id) = _remote_peer_id {
-                                    let request_msg = ProtocolMessage::Request {
+                                // Send initial sync message
+                                let sync_msg = repository.generate_sync_message(&sender_id).await?;
+                                
+                                if !sync_msg.is_empty() {
+                                    let sync_message = ProtocolMessage::Sync {
                                         document_id: document_id.clone(),
                                         sender_id: peer_id.clone(),
-                                        target_id: remote_id.clone(),
+                                        target_id: sender_id.clone(),
+                                        data: sync_msg,
                                     };
                                     
-                                    let request_data = cbor4ii::serde::to_vec(vec![0], &request_msg)
-                                        .map_err(|e| BookmarkError::SyncError(format!("Failed to encode request: {}", e)))?;
+                                    let sync_data = cbor4ii::serde::to_vec(vec![0], &sync_message)
+                                        .map_err(|e| BookmarkError::SyncError(format!("Failed to encode sync message: {}", e)))?;
                                     
-                                    write.send(Message::Binary(request_data)).await
-                                        .map_err(|e| BookmarkError::SyncError(format!("Failed to send request: {}", e)))?;
+                                    write.send(Message::Binary(sync_data)).await
+                                        .map_err(|e| BookmarkError::SyncError(format!("Failed to send sync message: {}", e)))?;
+                                    
+                                    changes_sent += 1;
+                                    
+                                    if format == OutputFormat::Human {
+                                        println!("📤 Sent initial sync data");
+                                    }
                                 }
                             }
                             Ok(ProtocolMessage::Sync { document_id: doc_id, data: sync_data, .. }) => {
@@ -184,9 +205,11 @@ pub async fn handle_sync_command(
                                     changes_received += 1;
                                     
                                     if !args.dry_run {
-                                        // TODO: Apply sync data to repository
-                                        // This requires integrating with Automerge's sync protocol
-                                        // For now, we'll just count the messages
+                                        // Apply sync message to repository
+                                        let changed = repository.apply_sync_message(&peer_id, sync_data.clone()).await?;
+                                        if changed && format == OutputFormat::Human {
+                                            println!("📝 Applied changes from sync message");
+                                        }
                                     }
                                     
                                     if format == OutputFormat::Human {
@@ -196,12 +219,28 @@ pub async fn handle_sync_command(
                             }
                             Ok(ProtocolMessage::Request { document_id: doc_id, sender_id, .. }) => {
                                 if doc_id == document_id {
-                                    // TODO: Send our document state
-                                    // This requires getting sync state from repository
-                                    changes_sent += 1;
+                                    // Generate and send our sync message
+                                    let sync_msg = repository.generate_sync_message(&sender_id).await?;
                                     
-                                    if format == OutputFormat::Human {
-                                        println!("📤 Sending sync data to peer: {}", sender_id);
+                                    if !sync_msg.is_empty() {
+                                        let sync_message = ProtocolMessage::Sync {
+                                            document_id: doc_id.clone(),
+                                            sender_id: peer_id.clone(),
+                                            target_id: sender_id.clone(),
+                                            data: sync_msg,
+                                        };
+                                        
+                                        let sync_data = cbor4ii::serde::to_vec(vec![0], &sync_message)
+                                            .map_err(|e| BookmarkError::SyncError(format!("Failed to encode sync message: {}", e)))?;
+                                        
+                                        write.send(Message::Binary(sync_data)).await
+                                            .map_err(|e| BookmarkError::SyncError(format!("Failed to send sync message: {}", e)))?;
+                                        
+                                        changes_sent += 1;
+                                        
+                                        if format == OutputFormat::Human {
+                                            println!("📤 Sent sync data to peer: {}", sender_id);
+                                        }
                                     }
                                 }
                             }
@@ -229,7 +268,7 @@ pub async fn handle_sync_command(
     let duration = start_time.elapsed();
     
     let response = SyncResponse {
-        server: args.server.clone(),
+        server: server_url.to_string(),
         document_id,
         changes_received,
         changes_sent,
@@ -260,16 +299,16 @@ mod tests {
     #[test]
     fn test_sync_args_default() {
         let args = SyncArgs {
-            server: "wss://sync.automerge.org".to_string(),
+            server: None,
             document_id: None,
             dry_run: false,
-            timeout: 30,
+            timeout: None,
         };
         
-        assert_eq!(args.server, "wss://sync.automerge.org");
+        assert!(args.server.is_none());
         assert!(args.document_id.is_none());
         assert!(!args.dry_run);
-        assert_eq!(args.timeout, 30);
+        assert!(args.timeout.is_none());
     }
     
     #[test]

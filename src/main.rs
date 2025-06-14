@@ -88,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle_search_command(args, &mut repository, format).await
         }
         Commands::Sync(args) => {
-            handle_sync_command(&args, &mut repository, format).await
+            handle_sync_command(&args, &mut repository, &config, format).await
         }
     };
     

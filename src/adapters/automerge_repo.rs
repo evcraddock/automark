@@ -3,14 +3,17 @@ use crate::types::{Bookmark, BookmarkResult, BookmarkError, BookmarkFilters, Sor
 use async_trait::async_trait;
 use automerge::{AutoCommit, ObjType, ReadDoc, ROOT};
 use automerge::transaction::Transactable;
+use automerge::sync::{self, SyncDoc, State as SyncState};
 use std::path::PathBuf;
 use std::fs;
+use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
 pub struct AutomergeBookmarkRepository {
     doc: AutoCommit,
     bookmarks_map: automerge::ObjId,
     file_path: PathBuf,
+    sync_states: HashMap<String, SyncState>,
 }
 
 impl AutomergeBookmarkRepository {
@@ -23,7 +26,12 @@ impl AutomergeBookmarkRepository {
 
         let (doc, bookmarks_map) = Self::load_from_file(&file_path)?;
 
-        Ok(Self { doc, bookmarks_map, file_path })
+        Ok(Self { 
+            doc, 
+            bookmarks_map, 
+            file_path,
+            sync_states: HashMap::new(),
+        })
     }
 
     fn load_from_file(path: &PathBuf) -> BookmarkResult<(AutoCommit, automerge::ObjId)> {
@@ -550,6 +558,61 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
         }
 
         Err(BookmarkError::NotFound(format!("Note {} not found", note_id)))
+    }
+    
+    async fn get_sync_state(&self, peer_id: &str) -> BookmarkResult<Option<Vec<u8>>> {
+        // Return the sync state for the given peer if it exists
+        Ok(self.sync_states.get(peer_id).map(|state| state.encode()))
+    }
+    
+    async fn save_sync_state(&mut self, peer_id: &str, state: Vec<u8>) -> BookmarkResult<()> {
+        // Decode and save the sync state
+        match SyncState::decode(&state) {
+            Ok(sync_state) => {
+                self.sync_states.insert(peer_id.to_string(), sync_state);
+                Ok(())
+            }
+            Err(e) => Err(BookmarkError::SyncError(format!("Failed to decode sync state: {}", e)))
+        }
+    }
+    
+    async fn generate_sync_message(&mut self, peer_id: &str) -> BookmarkResult<Vec<u8>> {
+        // Get or create sync state for this peer
+        let sync_state = self.sync_states
+            .entry(peer_id.to_string())
+            .or_insert_with(SyncState::new);
+        
+        // Generate sync message
+        let message = self.doc.sync()
+            .generate_sync_message(sync_state)
+            .ok_or_else(|| BookmarkError::SyncError("No sync message to send".to_string()))?;
+        
+        Ok(message.encode())
+    }
+    
+    async fn apply_sync_message(&mut self, peer_id: &str, message: Vec<u8>) -> BookmarkResult<bool> {
+        // Get or create sync state for this peer
+        let sync_state = self.sync_states
+            .entry(peer_id.to_string())
+            .or_insert_with(SyncState::new);
+        
+        // Decode the sync message
+        let sync_message = sync::Message::decode(&message)
+            .map_err(|e| BookmarkError::SyncError(format!("Failed to decode sync message: {}", e)))?;
+        
+        // Apply the sync message and save if changes were made
+        self.doc.sync()
+            .receive_sync_message(sync_state, sync_message)
+            .map_err(|e| BookmarkError::SyncError(format!("Failed to apply sync message: {}", e)))?;
+        
+        // Check if document has changed
+        let has_changes = self.doc.get_last_local_change().is_some();
+        
+        if has_changes {
+            self.save()?;
+        }
+        
+        Ok(has_changes)
     }
 
     async fn delete(&mut self, id: &str) -> BookmarkResult<()> {

@@ -19,6 +19,8 @@ pub type ConfigResult<T> = Result<T, ConfigError>;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Config {
     pub storage: StorageConfig,
+    #[serde(default)]
+    pub sync: SyncConfig,
 }
 
 /// Storage configuration settings
@@ -29,10 +31,31 @@ pub struct StorageConfig {
 }
 
 
+/// Sync configuration settings
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SyncConfig {
+    /// Enable sync functionality
+    pub enabled: bool,
+    /// Default sync server URL
+    pub server_url: String,
+    /// Connection timeout in seconds
+    pub timeout_secs: u64,
+}
+
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
             data_dir: "~/.local/share/automark".to_string(),
+        }
+    }
+}
+
+impl Default for SyncConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            server_url: "wss://sync.automerge.org".to_string(),
+            timeout_secs: 30,
         }
     }
 }
@@ -72,6 +95,17 @@ impl Config {
 # Directory where bookmark data is stored
 # Use ~ for home directory, which will be expanded automatically
 data_dir = "~/.local/share/automark"
+
+[sync]
+# Enable or disable sync functionality
+enabled = true
+
+# Default sync server URL
+# The Automerge community server is for development/prototyping only
+server_url = "wss://sync.automerge.org"
+
+# Connection timeout in seconds
+timeout_secs = 30
 "#.to_string()
     }
 }
