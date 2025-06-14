@@ -16,15 +16,6 @@ pub struct MockMetadataExtractor {
 
 #[cfg(test)]
 impl MockMetadataExtractor {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self {
-            should_fail: false,
-            extracted_title: Some("Extracted Title".to_string()),
-            extracted_author: Some("Extracted Author".to_string()),
-        }
-    }
-
 }
 
 #[cfg(test)]
