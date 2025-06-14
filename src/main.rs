@@ -3,22 +3,22 @@ mod traits;
 mod adapters;
 mod commands;
 
-use std::path::PathBuf;
 use std::process;
 use clap::Parser;
 use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, handle_search_command, output};
-use adapters::AutomergeBookmarkRepository;
-use types::BookmarkError;
+use adapters::{AutomergeBookmarkRepository, FileStorageManager};
+use types::{BookmarkError, ConfigError};
 
-fn get_data_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let data_dir = dirs::data_local_dir()
-        .ok_or("Could not determine local data directory")?
-        .join("automark");
-    
-    // Create data directory if it doesn't exist
-    std::fs::create_dir_all(&data_dir)?;
-    
-    Ok(data_dir.join("bookmarks.automerge"))
+fn handle_config_error(error: ConfigError, format: OutputFormat) -> ! {
+    match format {
+        OutputFormat::Json => {
+            eprintln!("{{\"success\": false, \"error\": {{\"code\": \"CONFIG_ERROR\", \"message\": \"{}\"}}}}", error);
+        }
+        OutputFormat::Human => {
+            eprintln!("Configuration error: {}", error);
+        }
+    }
+    process::exit(1);
 }
 
 fn handle_bookmark_error(error: BookmarkError, format: OutputFormat) -> ! {
@@ -38,8 +38,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let format = OutputFormat::from(cli.output);
     
+    // Load configuration
+    let config = match FileStorageManager::load_config() {
+        Ok(config) => config,
+        Err(e) => handle_config_error(e, format),
+    };
+    
+    // Ensure data directory exists
+    let _data_dir = match FileStorageManager::ensure_data_directory(&config) {
+        Ok(dir) => dir,
+        Err(e) => handle_config_error(e, format),
+    };
+    
+    // Get bookmark file path
+    let data_file_path = match FileStorageManager::get_bookmark_file_path(&config) {
+        Ok(path) => path,
+        Err(e) => handle_config_error(e, format),
+    };
+    
     // Initialize repository
-    let data_file_path = get_data_file_path()?;
     let mut repository = match AutomergeBookmarkRepository::new(data_file_path) {
         Ok(repo) => repo,
         Err(e) => {
