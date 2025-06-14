@@ -39,6 +39,14 @@ impl MockMetadataExtractor {
             extracted_author: None,
         }
     }
+
+    pub fn with_metadata(title: Option<String>, author: Option<String>, _publish_date: Option<chrono::DateTime<chrono::Utc>>) -> Self {
+        Self {
+            should_fail: false,
+            extracted_title: title,
+            extracted_author: author,
+        }
+    }
 }
 
 #[cfg(test)]

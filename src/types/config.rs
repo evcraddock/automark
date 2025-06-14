@@ -21,6 +21,8 @@ pub struct Config {
     pub storage: StorageConfig,
     #[serde(default)]
     pub sync: SyncConfig,
+    #[serde(default)]
+    pub metadata: MetadataConfig,
 }
 
 /// Storage configuration settings
@@ -46,6 +48,21 @@ pub struct SyncConfig {
     pub show_progress: bool,
 }
 
+/// Metadata extraction configuration settings
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MetadataConfig {
+    /// Enable metadata extraction by default
+    pub enabled: bool,
+    /// Timeout for metadata extraction in seconds
+    pub timeout_secs: u64,
+    /// User agent string for HTTP requests
+    pub user_agent: String,
+    /// Number of retry attempts for failed extractions
+    pub retry_attempts: u32,
+    /// Retry delay in milliseconds
+    pub retry_delay_ms: u64,
+}
+
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
@@ -62,6 +79,18 @@ impl Default for SyncConfig {
             timeout_secs: 30,
             auto_sync: false, // Disabled by default for user control
             show_progress: true,
+        }
+    }
+}
+
+impl Default for MetadataConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            timeout_secs: 10,
+            user_agent: "automark/1.0 (https://github.com/evcraddock/automark)".to_string(),
+            retry_attempts: 2,
+            retry_delay_ms: 1000,
         }
     }
 }
@@ -119,6 +148,22 @@ auto_sync = false
 
 # Show sync progress messages in human output mode
 show_progress = true
+
+[metadata]
+# Enable metadata extraction by default when adding bookmarks
+enabled = true
+
+# Timeout for metadata extraction in seconds
+timeout_secs = 10
+
+# User agent string for HTTP requests
+user_agent = "automark/1.0 (https://github.com/evcraddock/automark)"
+
+# Number of retry attempts for failed extractions
+retry_attempts = 2
+
+# Retry delay in milliseconds
+retry_delay_ms = 1000
 "#.to_string()
     }
 }

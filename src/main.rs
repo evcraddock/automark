@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Execute commands
     let result = match &cli.command {
         Commands::Add(args) => {
-            let result = handle_add_command(args.clone(), &mut repository, format).await;
+            let result = handle_add_command(args.clone(), &mut repository, &config, format).await;
             if result.is_ok() {
                 auto_sync::auto_sync_if_enabled(&mut repository, &config, format).await?;
             }

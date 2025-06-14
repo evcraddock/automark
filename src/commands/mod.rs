@@ -183,7 +183,14 @@ pub struct AddArgs {
     /// URL to bookmark
     pub url: String,
     /// Title for the bookmark (optional, will be extracted from page if not provided)
+    #[arg(short, long)]
     pub title: Option<String>,
+    /// Author for the bookmark (optional, will be extracted from page if not provided)
+    #[arg(short, long)]
+    pub author: Option<String>,
+    /// Initial tags for the bookmark (comma-separated)
+    #[arg(short = 'g', long = "tags", value_delimiter = ',')]
+    pub tags: Vec<String>,
     /// Skip metadata extraction and prompt for title if not provided
     #[arg(long)]
     pub no_fetch: bool,
@@ -207,12 +214,14 @@ mod tests {
 
     #[test]
     fn test_add_command_parsing() {
-        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "Example Title"]);
+        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--title", "Example Title"]);
         assert!(cli.is_ok());
         
         if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, Some("Example Title".to_string()));
+            assert_eq!(args.author, None);
+            assert_eq!(args.tags, Vec::<String>::new());
             assert_eq!(args.no_fetch, false);
         } else {
             panic!("Expected Add command");
@@ -289,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_add_with_spaces_in_title() {
-        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "Multi Word Title"]);
+        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--title", "Multi Word Title"]);
         assert!(cli.is_ok());
         
         if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
@@ -305,6 +314,8 @@ mod tests {
         if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, None);
+            assert_eq!(args.author, None);
+            assert_eq!(args.tags, Vec::<String>::new());
             assert_eq!(args.no_fetch, false);
         } else {
             panic!("Expected Add command");
@@ -319,6 +330,8 @@ mod tests {
         if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, None);
+            assert_eq!(args.author, None);
+            assert_eq!(args.tags, Vec::<String>::new());
             assert_eq!(args.no_fetch, true);
         } else {
             panic!("Expected Add command");
@@ -327,12 +340,14 @@ mod tests {
 
     #[test]
     fn test_add_with_title_and_no_fetch_flag() {
-        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "Title", "--no-fetch"]);
+        let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--title", "Title", "--no-fetch"]);
         assert!(cli.is_ok());
         
         if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, Some("Title".to_string()));
+            assert_eq!(args.author, None);
+            assert_eq!(args.tags, Vec::<String>::new());
             assert_eq!(args.no_fetch, true);
         } else {
             panic!("Expected Add command");
@@ -370,13 +385,16 @@ mod tests {
         }
 
         // Test output flag with add command
-        let cli = Cli::try_parse_from(&["automark", "-o", "json", "add", "https://example.com", "Test"]);
+        let cli = Cli::try_parse_from(&["automark", "-o", "json", "add", "https://example.com", "--title", "Test"]);
         assert!(cli.is_ok());
         if let Ok(cli) = cli {
             assert!(matches!(cli.output, OutputFormatArg::Json));
             if let Commands::Add(args) = cli.command {
                 assert_eq!(args.url, "https://example.com");
                 assert_eq!(args.title, Some("Test".to_string()));
+                assert_eq!(args.author, None);
+                assert_eq!(args.tags, Vec::<String>::new());
+                assert_eq!(args.no_fetch, false);
             }
         }
     }
