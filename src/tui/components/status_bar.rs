@@ -33,7 +33,7 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, mode: &ViewMode, message: Op
 /// Get key hints for the current mode
 fn get_key_hints(mode: &ViewMode) -> &'static str {
     match mode {
-        ViewMode::List => "↑/↓ or j/k: navigate | Enter: details | /: search | a: add | d: delete | q: quit",
+        ViewMode::List => "↑/↓ or j/k: navigate | Enter: open URL | e: details | /: search | a: add | d: delete | q: quit",
         ViewMode::Detail => "Esc: back to list | q: quit",
         ViewMode::Search => "Type to search | Enter: apply search | Esc: cancel",
         ViewMode::Add => "Type URL | Enter: add bookmark | Esc: cancel",

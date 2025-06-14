@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::traits::BookmarkRepository;
 use crate::types::{Bookmark, BookmarkResult};
 use crate::tui::app::{TuiApp, ViewMode, TuiMessage};
+use std::process::Command;
 
 /// Handle keyboard events based on current application mode
 pub async fn handle_key_event(
@@ -35,6 +36,16 @@ async fn handle_list_mode_keys(
             app.navigate_up();
         }
         KeyCode::Enter => {
+            if let Some(bookmark) = app.selected_bookmark() {
+                // Open URL in default browser
+                if let Err(e) = open_url(&bookmark.url) {
+                    app.set_message(TuiMessage::Error(format!("Failed to open URL: {}", e)));
+                } else {
+                    app.set_message(TuiMessage::Success(format!("Opened: {}", bookmark.title)));
+                }
+            }
+        }
+        KeyCode::Char('e') | KeyCode::Char('E') => {
             if app.selected_bookmark().is_some() {
                 app.mode = ViewMode::Detail;
             }
@@ -224,6 +235,29 @@ fn extract_domain(url: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Open URL in the default browser
+fn open_url(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(url).spawn()?;
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open").arg(url).spawn()?;
+        Ok(())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd").args(["/C", "start", "", url]).spawn()?;
+        Ok(())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err(format!("Opening URLs is not supported on this platform").into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,5 +343,49 @@ mod tests {
         let key = create_test_key_event(KeyCode::Backspace);
         handle_key_event(key, &mut app, &mut repo as &mut dyn BookmarkRepository).await.unwrap();
         assert_eq!(app.search_query, "");
+    }
+
+    #[tokio::test]
+    async fn test_enter_opens_url() {
+        let mut repo = MockBookmarkRepository::new();
+        let bookmark = Bookmark::new("https://example.com", "Example").unwrap();
+        repo.create(bookmark).await.unwrap();
+        
+        let mut app = TuiApp::new(&repo).await.unwrap();
+        app.selected_index = Some(0);
+        
+        // Test Enter key opens URL (we can't actually test browser opening, but we can test the code path)
+        let key = create_test_key_event(KeyCode::Enter);
+        handle_key_event(key, &mut app, &mut repo as &mut dyn BookmarkRepository).await.unwrap();
+        // Should not crash and may have set a message
+    }
+
+    #[tokio::test]
+    async fn test_e_opens_details() {
+        let mut repo = MockBookmarkRepository::new();
+        let bookmark = Bookmark::new("https://example.com", "Example").unwrap();
+        repo.create(bookmark).await.unwrap();
+        
+        let mut app = TuiApp::new(&repo).await.unwrap();
+        app.selected_index = Some(0);
+        assert_eq!(app.mode, ViewMode::List);
+        
+        // Test 'e' key opens details
+        let key = create_test_key_event(KeyCode::Char('e'));
+        handle_key_event(key, &mut app, &mut repo as &mut dyn BookmarkRepository).await.unwrap();
+        assert_eq!(app.mode, ViewMode::Detail);
+    }
+
+    #[test]
+    fn test_open_url_function() {
+        // Test that open_url function doesn't panic with valid URLs
+        // We can't actually test browser opening in CI, but we can test the function exists
+        let result = open_url("https://example.com");
+        // The function should complete without panicking
+        // Result may be Ok or Err depending on the environment, which is fine
+        match result {
+            Ok(_) => {}, // Success case
+            Err(_) => {}, // Expected failure in CI environment
+        }
     }
 }

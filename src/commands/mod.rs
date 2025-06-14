@@ -136,10 +136,11 @@ pub mod output {
 #[derive(Parser)]
 #[command(name = "automark")]
 #[command(about = "A local-first CLI bookmarking application")]
+#[command(long_about = "A local-first CLI bookmarking application with interactive TUI.\n\nRun without any command to start the interactive TUI interface.")]
 #[command(version)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
     /// Output format
     #[arg(short = 'o', long = "output", value_enum, default_value = "human", global = true)]
     pub output: OutputFormatArg,
@@ -174,8 +175,6 @@ pub enum Commands {
     Search(search::SearchArgs),
     /// Sync bookmarks with a remote server
     Sync(sync::SyncArgs),
-    /// Start the interactive TUI
-    Tui(tui::TuiArgs),
 }
 
 #[derive(Args, Clone)]
@@ -217,7 +216,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--title", "Example Title"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::Add(args)), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, Some("Example Title".to_string()));
             assert_eq!(args.author, None);
@@ -233,7 +232,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "list"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::List, .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::List), .. }) = cli {
             // Success
         } else {
             panic!("Expected List command");
@@ -245,7 +244,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "delete", "abc123"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::Delete(args), .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::Delete(args)), .. }) = cli {
             assert_eq!(args.id, "abc123");
         } else {
             panic!("Expected Delete command");
@@ -301,7 +300,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--title", "Multi Word Title"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::Add(args)), .. }) = cli {
             assert_eq!(args.title, Some("Multi Word Title".to_string()));
         }
     }
@@ -311,7 +310,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "add", "https://example.com"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::Add(args)), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, None);
             assert_eq!(args.author, None);
@@ -327,7 +326,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--no-fetch"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::Add(args)), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, None);
             assert_eq!(args.author, None);
@@ -343,7 +342,7 @@ mod tests {
         let cli = Cli::try_parse_from(&["automark", "add", "https://example.com", "--title", "Title", "--no-fetch"]);
         assert!(cli.is_ok());
         
-        if let Ok(Cli { command: Commands::Add(args), .. }) = cli {
+        if let Ok(Cli { command: Some(Commands::Add(args)), .. }) = cli {
             assert_eq!(args.url, "https://example.com");
             assert_eq!(args.title, Some("Title".to_string()));
             assert_eq!(args.author, None);
@@ -389,13 +388,25 @@ mod tests {
         assert!(cli.is_ok());
         if let Ok(cli) = cli {
             assert!(matches!(cli.output, OutputFormatArg::Json));
-            if let Commands::Add(args) = cli.command {
+            if let Some(Commands::Add(args)) = cli.command {
                 assert_eq!(args.url, "https://example.com");
                 assert_eq!(args.title, Some("Test".to_string()));
                 assert_eq!(args.author, None);
                 assert_eq!(args.tags, Vec::<String>::new());
                 assert_eq!(args.no_fetch, false);
             }
+        }
+    }
+
+    #[test]
+    fn test_no_command_defaults_to_tui() {
+        let cli = Cli::try_parse_from(&["automark"]);
+        assert!(cli.is_ok());
+        
+        if let Ok(Cli { command: None, .. }) = cli {
+            // Success - no command should default to TUI
+        } else {
+            panic!("Expected no command (should default to TUI)");
         }
     }
 

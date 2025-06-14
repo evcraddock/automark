@@ -77,31 +77,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Execute commands
     let result = match &cli.command {
-        Commands::Add(args) => {
+        Some(Commands::Add(args)) => {
             let result = handle_add_command(args.clone(), &mut repository, &config, format).await;
             if result.is_ok() {
                 auto_sync::auto_sync_if_enabled(&mut repository, &config, format).await?;
             }
             result
         }
-        Commands::List => {
+        Some(Commands::List) => {
             handle_list_command(&mut repository, format).await
         }
-        Commands::Delete(args) => {
+        Some(Commands::Delete(args)) => {
             let result = handle_delete_command(args.clone(), &mut repository, format).await;
             if result.is_ok() {
                 auto_sync::auto_sync_if_enabled(&mut repository, &config, format).await?;
             }
             result
         }
-        Commands::Search(args) => {
+        Some(Commands::Search(args)) => {
             handle_search_command(args.clone(), &mut repository, format).await
         }
-        Commands::Sync(args) => {
+        Some(Commands::Sync(args)) => {
             handle_sync_command(args, &mut repository, &config, format).await
         }
-        Commands::Tui(args) => {
-            handle_tui_command(args.clone(), &mut repository, format).await
+        None => {
+            // Default to TUI when no command is provided
+            let tui_args = commands::tui::TuiArgs {};
+            handle_tui_command(tui_args, &mut repository, format).await
         }
     };
     
