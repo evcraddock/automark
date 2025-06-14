@@ -295,10 +295,7 @@ impl AutomergeBookmarkRepository {
     }
 
     fn bookmark_exists(&self, id: &str) -> bool {
-        match self.doc.get(&self.bookmarks_map, id) {
-            Ok(Some(_)) => true,
-            _ => false,
-        }
+        matches!(self.doc.get(&self.bookmarks_map, id), Ok(Some(_)))
     }
     
     fn apply_filters(&self, mut bookmarks: Vec<Bookmark>, filters: &BookmarkFilters) -> Vec<Bookmark> {
@@ -308,7 +305,7 @@ impl AutomergeBookmarkRepository {
             bookmarks.retain(|bookmark| {
                 bookmark.title.to_lowercase().contains(&query_lower) ||
                 bookmark.url.to_lowercase().contains(&query_lower) ||
-                bookmark.author.as_ref().map_or(false, |author| author.to_lowercase().contains(&query_lower)) ||
+                bookmark.author.as_ref().is_some_and(|author| author.to_lowercase().contains(&query_lower)) ||
                 bookmark.notes.iter().any(|note| note.content.to_lowercase().contains(&query_lower))
             });
         }
@@ -406,7 +403,7 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
             .filter(|bookmark| {
                 bookmark.title.to_lowercase().contains(&query_lower) ||
                 bookmark.url.to_lowercase().contains(&query_lower) ||
-                bookmark.author.as_ref().map_or(false, |author| author.to_lowercase().contains(&query_lower)) ||
+                bookmark.author.as_ref().is_some_and(|author| author.to_lowercase().contains(&query_lower)) ||
                 bookmark.notes.iter().any(|note| note.content.to_lowercase().contains(&query_lower))
             })
             .collect();
