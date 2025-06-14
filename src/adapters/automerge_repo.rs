@@ -580,7 +580,7 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
         // Get or create sync state for this peer
         let sync_state = self.sync_states
             .entry(peer_id.to_string())
-            .or_insert_with(SyncState::new);
+            .or_default();
         
         // Generate sync message
         let message = self.doc.sync()
@@ -594,7 +594,7 @@ impl BookmarkRepository for AutomergeBookmarkRepository {
         // Get or create sync state for this peer
         let sync_state = self.sync_states
             .entry(peer_id.to_string())
-            .or_insert_with(SyncState::new);
+            .or_default();
         
         // Decode the sync message
         let sync_message = sync::Message::decode(&message)
