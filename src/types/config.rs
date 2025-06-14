@@ -96,12 +96,6 @@ impl Default for MetadataConfig {
 }
 
 impl Config {
-    /// Create a new configuration with default values
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self::default()
-    }
-    
     /// Get the expanded data directory path
     pub fn data_dir_path(&self) -> ConfigResult<PathBuf> {
         expand_path(&self.storage.data_dir)
@@ -201,11 +195,6 @@ mod tests {
         assert_eq!(config.storage.data_dir, "~/.local/share/automark");
     }
 
-    #[test]
-    fn test_config_new() {
-        let config = Config::new();
-        assert_eq!(config, Config::default());
-    }
 
     #[test]
     fn test_storage_config_default() {
@@ -332,7 +321,7 @@ mod tests {
     #[test]
     fn test_config_equality() {
         let config1 = Config::default();
-        let config2 = Config::new();
+        let config2 = Config::default();
         assert_eq!(config1, config2);
         
         let mut config3 = Config::default();

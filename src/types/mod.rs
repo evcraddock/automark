@@ -10,9 +10,6 @@ use thiserror::Error;
 pub enum ExtractorError {
     #[error("Network request failed: {0}")]
     NetworkError(String),
-    #[error("Failed to parse HTML: {0}")]
-    #[allow(dead_code)]
-    ParseError(String),
     #[error("Request timed out")]
     Timeout,
     #[error("Invalid URL: {0}")]
@@ -78,10 +75,6 @@ mod tests {
         let network_error = ExtractorError::NetworkError("connection failed".to_string());
         assert!(matches!(network_error, ExtractorError::NetworkError(_)));
         assert_eq!(network_error.to_string(), "Network request failed: connection failed");
-
-        let parse_error = ExtractorError::ParseError("malformed html".to_string());
-        assert!(matches!(parse_error, ExtractorError::ParseError(_)));
-        assert_eq!(parse_error.to_string(), "Failed to parse HTML: malformed html");
 
         let timeout_error = ExtractorError::Timeout;
         assert!(matches!(timeout_error, ExtractorError::Timeout));
