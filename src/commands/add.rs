@@ -1,9 +1,10 @@
-use crate::commands::{AddArgs, CommandHandler};
+use crate::commands::{AddArgs, CommandHandler, OutputFormat, output};
 use crate::traits::{BookmarkRepository, MetadataExtractor};
 use crate::types::{Bookmark, BookmarkResult};
 use crate::adapters::WebExtractor;
 use std::time::Duration;
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use serde::{Serialize, Deserialize};
 
 pub struct AddCommand {
     pub args: AddArgs,
@@ -15,9 +16,17 @@ impl AddCommand {
     }
 }
 
+/// JSON response data for add command
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AddResponse {
+    pub bookmark: Bookmark,
+    pub metadata_extracted: bool,
+    pub extraction_time_ms: Option<u64>,
+}
+
 #[async_trait::async_trait]
 impl CommandHandler for AddCommand {
-    async fn execute(&self, repository: &mut dyn BookmarkRepository) -> BookmarkResult<()> {
+    async fn execute(&self, repository: &mut dyn BookmarkRepository, format: OutputFormat) -> BookmarkResult<()> {
         // For now, just handle the case where title is provided
         // We'll implement the full logic with metadata extraction later
         let title = match &self.args.title {
@@ -33,11 +42,23 @@ impl CommandHandler for AddCommand {
         // Save via repository
         let saved_bookmark = repository.create(bookmark).await?;
         
-        // Print success message
-        println!("Added bookmark: {}", saved_bookmark.title);
-        println!("URL: {}", saved_bookmark.url);
-        println!("ID: {}", saved_bookmark.id);
-        println!("Added: {}", saved_bookmark.bookmarked_date.format("%Y-%m-%d %H:%M:%S UTC"));
+        match format {
+            OutputFormat::Json => {
+                let response = AddResponse {
+                    bookmark: saved_bookmark,
+                    metadata_extracted: false,
+                    extraction_time_ms: None,
+                };
+                output::print_response(format, response)?;
+            }
+            OutputFormat::Human => {
+                // Print success message
+                println!("Added bookmark: {}", saved_bookmark.title);
+                println!("URL: {}", saved_bookmark.url);
+                println!("ID: {}", saved_bookmark.id);
+                println!("Added: {}", saved_bookmark.bookmarked_date.format("%Y-%m-%d %H:%M:%S UTC"));
+            }
+        }
         
         Ok(())
     }
@@ -46,25 +67,46 @@ impl CommandHandler for AddCommand {
 pub async fn handle_add_command(
     args: AddArgs,
     repository: &mut dyn BookmarkRepository,
+    format: OutputFormat,
 ) -> BookmarkResult<()> {
     let extractor = WebExtractor::new();
-    handle_add_command_with_extractor(args, repository, &extractor).await
+    handle_add_command_with_extractor(args, repository, &extractor, format).await
 }
 
 pub async fn handle_add_command_with_extractor(
     args: AddArgs,
     repository: &mut dyn BookmarkRepository,
     extractor: &dyn MetadataExtractor,
+    format: OutputFormat,
 ) -> BookmarkResult<()> {
+    let start_time = std::time::Instant::now();
     let title = determine_title(&args, extractor).await?;
+    let extraction_time = start_time.elapsed();
+    
     let bookmark = Bookmark::new(&args.url, &title)?;
     let saved_bookmark = repository.create(bookmark).await?;
     
-    // Print success message
-    println!("Added bookmark: {}", saved_bookmark.title);
-    println!("URL: {}", saved_bookmark.url);
-    println!("ID: {}", saved_bookmark.id);
-    println!("Added: {}", saved_bookmark.bookmarked_date.format("%Y-%m-%d %H:%M:%S UTC"));
+    match format {
+        OutputFormat::Json => {
+            let response = AddResponse {
+                bookmark: saved_bookmark,
+                metadata_extracted: args.title.is_none() && !args.no_fetch,
+                extraction_time_ms: if args.title.is_none() && !args.no_fetch {
+                    Some(extraction_time.as_millis() as u64)
+                } else {
+                    None
+                },
+            };
+            output::print_response(format, response)?;
+        }
+        OutputFormat::Human => {
+            // Print success message
+            println!("Added bookmark: {}", saved_bookmark.title);
+            println!("URL: {}", saved_bookmark.url);
+            println!("ID: {}", saved_bookmark.id);
+            println!("Added: {}", saved_bookmark.bookmarked_date.format("%Y-%m-%d %H:%M:%S UTC"));
+        }
+    }
     
     Ok(())
 }
@@ -140,7 +182,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command(args, &mut repo).await;
+        let result = handle_add_command(args, &mut repo, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         // Verify bookmark was created in repository
@@ -159,7 +201,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command(args, &mut repo).await;
+        let result = handle_add_command(args, &mut repo, OutputFormat::Human).await;
         assert!(matches!(result, Err(BookmarkError::InvalidUrl(_))));
         
         // Verify no bookmark was created
@@ -177,7 +219,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
         assert!(matches!(result, Err(BookmarkError::EmptyTitle)));
         
         // Verify no bookmark was created
@@ -195,7 +237,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
         assert!(matches!(result, Err(BookmarkError::EmptyTitle)));
         
         // Verify no bookmark was created
@@ -233,7 +275,7 @@ mod tests {
                 no_fetch: false,
             };
             
-            let result = handle_add_command(args, &mut repo).await;
+            let result = handle_add_command(args, &mut repo, OutputFormat::Human).await;
             assert!(result.is_ok(), "Failed to add bookmark for URL: {}", url);
         }
         
@@ -251,7 +293,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command(args, &mut repo).await;
+        let result = handle_add_command(args, &mut repo, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         let bookmarks = repo.find_all(None).await.unwrap();
@@ -268,7 +310,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         let bookmarks = repo.find_all(None).await.unwrap();
@@ -287,7 +329,7 @@ mod tests {
             no_fetch: false,
         };
         
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
         assert!(result.is_ok());
         
         let bookmarks = repo.find_all(None).await.unwrap();
@@ -308,7 +350,7 @@ mod tests {
         // This test would normally prompt for user input
         // For now, we'll test that it fails appropriately when no input method is provided
         // In the real implementation, we'll need to handle this case
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
         
         // For now, let's expect it to handle the error gracefully
         // We'll implement the user prompt functionality next
@@ -326,10 +368,67 @@ mod tests {
         };
         
         // With no_fetch = true, should not use extractor and should prompt for title
-        let result = handle_add_command_with_extractor(args, &mut repo, &extractor).await;
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Human).await;
         
         // This should fail or prompt for input when no title provided and no_fetch is true
         assert!(result.is_err() || result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_add_command_json_output() {
+        let mut repo = MockBookmarkRepository::new();
+        let extractor = MockMetadataExtractor::with_title("Extracted Title");
+        let args = AddArgs {
+            url: "https://example.com".to_string(),
+            title: Some("Test Bookmark".to_string()),
+            no_fetch: false,
+        };
+        
+        let result = handle_add_command_with_extractor(args, &mut repo, &extractor, OutputFormat::Json).await;
+        assert!(result.is_ok());
+        
+        // Verify bookmark was created
+        let bookmarks = repo.find_all(None).await.unwrap();
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].title, "Test Bookmark");
+    }
+
+    #[tokio::test]
+    async fn test_add_command_handler_json_format() {
+        let mut repo = MockBookmarkRepository::new();
+        let args = AddArgs {
+            url: "https://example.com".to_string(),
+            title: Some("Handler Test".to_string()),
+            no_fetch: false,
+        };
+        
+        let command = AddCommand::new(args);
+        let result = command.execute(&mut repo, OutputFormat::Json).await;
+        assert!(result.is_ok());
+        
+        // Verify bookmark was created
+        let bookmarks = repo.find_all(None).await.unwrap();
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].title, "Handler Test");
+    }
+
+    #[tokio::test]
+    async fn test_add_response_serialization() {
+        let bookmark = Bookmark::new("https://example.com", "Test").unwrap();
+        let response = AddResponse {
+            bookmark: bookmark.clone(),
+            metadata_extracted: true,
+            extraction_time_ms: Some(250),
+        };
+        
+        // Test that the response can be serialized to JSON
+        let json = serde_json::to_string(&response);
+        assert!(json.is_ok());
+        
+        let json_str = json.unwrap();
+        assert!(json_str.contains("\"metadata_extracted\":true"));
+        assert!(json_str.contains("\"extraction_time_ms\":250"));
+        assert!(json_str.contains(&bookmark.id));
     }
 }
 
