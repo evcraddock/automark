@@ -9,6 +9,7 @@ pub mod list;
 pub mod delete;
 pub mod search;
 pub mod sync;
+pub mod auto_sync;
 
 pub use add::handle_add_command;
 pub use list::handle_list_command;
@@ -172,7 +173,7 @@ pub enum Commands {
     Sync(sync::SyncArgs),
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct AddArgs {
     /// URL to bookmark
     pub url: String,
@@ -183,7 +184,7 @@ pub struct AddArgs {
     pub no_fetch: bool,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct DeleteArgs {
     /// ID of bookmark to delete (can be partial ID)
     pub id: String,

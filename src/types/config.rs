@@ -40,6 +40,10 @@ pub struct SyncConfig {
     pub server_url: String,
     /// Connection timeout in seconds
     pub timeout_secs: u64,
+    /// Automatically sync after operations (add, delete, etc.)
+    pub auto_sync: bool,
+    /// Show sync progress in human output mode
+    pub show_progress: bool,
 }
 
 impl Default for StorageConfig {
@@ -56,6 +60,8 @@ impl Default for SyncConfig {
             enabled: true,
             server_url: "wss://sync.automerge.org".to_string(),
             timeout_secs: 30,
+            auto_sync: false, // Disabled by default for now
+            show_progress: true,
         }
     }
 }
@@ -106,6 +112,13 @@ server_url = "wss://sync.automerge.org"
 
 # Connection timeout in seconds
 timeout_secs = 30
+
+# Automatically sync after operations (add, delete, etc.)
+# Set to true for seamless collaboration
+auto_sync = false
+
+# Show sync progress messages in human output mode
+show_progress = true
 "#.to_string()
     }
 }
