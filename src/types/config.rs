@@ -60,7 +60,7 @@ impl Default for SyncConfig {
             enabled: true,
             server_url: "wss://sync.automerge.org".to_string(),
             timeout_secs: 30,
-            auto_sync: false, // Disabled by default for now
+            auto_sync: false, // Disabled by default for user control
             show_progress: true,
         }
     }
