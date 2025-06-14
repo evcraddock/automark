@@ -1,4 +1,4 @@
-use crate::types::{Bookmark, BookmarkResult, BookmarkFilters, BookmarkError};
+use crate::types::{Bookmark, BookmarkResult, BookmarkFilters};
 use async_trait::async_trait;
 
 /// Repository trait for managing bookmarks with CRDT support
