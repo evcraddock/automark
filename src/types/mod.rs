@@ -2,7 +2,7 @@ pub mod bookmark;
 pub mod config;
 
 pub use bookmark::{Bookmark, Note, ReadingStatus, BookmarkFilters, ExtractedMetadata, SortBy, SortDirection};
-pub use config::{Config, StorageConfig, SyncConfig, ConfigError, ConfigResult, expand_path};
+pub use config::{Config, ConfigError, ConfigResult};
 
 use thiserror::Error;
 
@@ -32,6 +32,8 @@ pub enum BookmarkError {
     MetadataExtraction(#[from] ExtractorError),
     #[error("Sync failed: {0}")]
     SyncError(String),
+    #[error("Terminal I/O error: {0}")]
+    TerminalError(#[from] std::io::Error),
 }
 
 pub type BookmarkResult<T> = Result<T, BookmarkError>;

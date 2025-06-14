@@ -2,10 +2,11 @@ mod types;
 mod traits;
 mod adapters;
 mod commands;
+mod tui;
 
 use std::process;
 use clap::Parser;
-use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, handle_search_command, handle_sync_command, auto_sync, output};
+use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, handle_search_command, handle_sync_command, handle_tui_command, auto_sync, output};
 use adapters::{AutomergeBookmarkRepository, FileStorageManager};
 use types::{BookmarkError, ConfigError};
 
@@ -30,6 +31,7 @@ fn handle_bookmark_error(error: BookmarkError, format: OutputFormat) -> ! {
         BookmarkError::InvalidId(_) => 3,
         BookmarkError::MetadataExtraction(_) => 4,
         BookmarkError::SyncError(_) => 5,
+        BookmarkError::TerminalError(_) => 6,
     };
     process::exit(exit_code);
 }
@@ -97,6 +99,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Sync(args) => {
             handle_sync_command(args, &mut repository, &config, format).await
+        }
+        Commands::Tui(args) => {
+            handle_tui_command(args.clone(), &mut repository, format).await
         }
     };
     
