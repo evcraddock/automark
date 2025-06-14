@@ -1,5 +1,5 @@
 use crate::traits::BookmarkRepository;
-use crate::types::{Bookmark, BookmarkResult, BookmarkError, BookmarkFilters};
+use crate::types::{Bookmark, BookmarkResult, BookmarkError, BookmarkFilters, SortBy, SortDirection};
 use async_trait::async_trait;
 use automerge::{AutoCommit, ObjType, ReadDoc, ROOT};
 use automerge::transaction::Transactable;
@@ -334,6 +334,66 @@ impl AutomergeBookmarkRepository {
                     false // If no priority set, exclude from priority range filter
                 }
             });
+        }
+        
+        // Apply bookmarked date range filter
+        if let Some(since) = filters.bookmarked_since {
+            bookmarks.retain(|bookmark| bookmark.bookmarked_date >= since);
+        }
+        if let Some(until) = filters.bookmarked_until {
+            bookmarks.retain(|bookmark| bookmark.bookmarked_date <= until);
+        }
+        
+        // Apply published date range filter
+        if let Some(since) = filters.published_since {
+            bookmarks.retain(|bookmark| {
+                bookmark.publish_date.is_some_and(|publish_date| publish_date >= since)
+            });
+        }
+        if let Some(until) = filters.published_until {
+            bookmarks.retain(|bookmark| {
+                bookmark.publish_date.is_some_and(|publish_date| publish_date <= until)
+            });
+        }
+        
+        // Apply sorting
+        if let Some(ref sort_by) = filters.sort_by {
+            let sort_order = filters.sort_order.as_ref().unwrap_or(&SortDirection::Descending);
+            
+            match sort_by {
+                SortBy::BookmarkedDate => {
+                    bookmarks.sort_by(|a, b| {
+                        match sort_order {
+                            SortDirection::Ascending => a.bookmarked_date.cmp(&b.bookmarked_date),
+                            SortDirection::Descending => b.bookmarked_date.cmp(&a.bookmarked_date),
+                        }
+                    });
+                }
+                SortBy::PublishDate => {
+                    bookmarks.sort_by(|a, b| {
+                        match sort_order {
+                            SortDirection::Ascending => a.publish_date.cmp(&b.publish_date),
+                            SortDirection::Descending => b.publish_date.cmp(&a.publish_date),
+                        }
+                    });
+                }
+                SortBy::Title => {
+                    bookmarks.sort_by(|a, b| {
+                        match sort_order {
+                            SortDirection::Ascending => a.title.cmp(&b.title),
+                            SortDirection::Descending => b.title.cmp(&a.title),
+                        }
+                    });
+                }
+                SortBy::Priority => {
+                    bookmarks.sort_by(|a, b| {
+                        match sort_order {
+                            SortDirection::Ascending => a.priority_rating.cmp(&b.priority_rating),
+                            SortDirection::Descending => b.priority_rating.cmp(&a.priority_rating),
+                        }
+                    });
+                }
+            }
         }
         
         bookmarks

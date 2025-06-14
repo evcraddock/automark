@@ -6,7 +6,7 @@ mod commands;
 use std::path::PathBuf;
 use std::process;
 use clap::Parser;
-use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, output};
+use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, handle_search_command, output};
 use adapters::AutomergeBookmarkRepository;
 use types::BookmarkError;
 
@@ -65,6 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Delete(args) => {
             handle_delete_command(args, &mut repository, format).await
+        }
+        Commands::Search(args) => {
+            handle_search_command(args, &mut repository, format).await
         }
     };
     

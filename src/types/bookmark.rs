@@ -26,7 +26,7 @@ pub struct Note {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, clap::ValueEnum)]
 pub enum ReadingStatus {
     Unread,
     Reading,
@@ -46,6 +46,26 @@ pub struct BookmarkFilters {
     pub tags: Option<Vec<String>>,
     pub reading_status: Option<ReadingStatus>,
     pub priority_range: Option<(u8, u8)>,
+    pub bookmarked_since: Option<DateTime<Utc>>,
+    pub bookmarked_until: Option<DateTime<Utc>>,
+    pub published_since: Option<DateTime<Utc>>,
+    pub published_until: Option<DateTime<Utc>>,
+    pub sort_by: Option<SortBy>,
+    pub sort_order: Option<SortDirection>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, clap::ValueEnum)]
+pub enum SortBy {
+    BookmarkedDate,
+    PublishDate,
+    Title,
+    Priority,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, clap::ValueEnum)]
+pub enum SortDirection {
+    Ascending,
+    Descending,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -206,12 +226,72 @@ mod tests {
             tags: Some(vec!["programming".to_string()]),
             reading_status: Some(ReadingStatus::Unread),
             priority_range: Some((3, 5)),
+            bookmarked_since: None,
+            bookmarked_until: None,
+            published_since: None,
+            published_until: None,
+            sort_by: Some(SortBy::BookmarkedDate),
+            sort_order: Some(SortDirection::Descending),
         };
         
         assert_eq!(filters.text_query, Some("rust".to_string()));
         assert_eq!(filters.tags, Some(vec!["programming".to_string()]));
         assert_eq!(filters.reading_status, Some(ReadingStatus::Unread));
         assert_eq!(filters.priority_range, Some((3, 5)));
+        assert_eq!(filters.sort_by, Some(SortBy::BookmarkedDate));
+        assert_eq!(filters.sort_order, Some(SortDirection::Descending));
+    }
+
+    #[test]
+    fn test_extended_bookmark_filters() {
+        let now = Utc::now();
+        let one_day_ago = now - chrono::Duration::days(1);
+        
+        let filters = BookmarkFilters {
+            text_query: None,
+            tags: None,
+            reading_status: None,
+            priority_range: None,
+            bookmarked_since: Some(one_day_ago),
+            bookmarked_until: Some(now),
+            published_since: Some(one_day_ago),
+            published_until: Some(now),
+            sort_by: Some(SortBy::Title),
+            sort_order: Some(SortDirection::Ascending),
+        };
+        
+        assert_eq!(filters.bookmarked_since, Some(one_day_ago));
+        assert_eq!(filters.bookmarked_until, Some(now));
+        assert_eq!(filters.published_since, Some(one_day_ago));
+        assert_eq!(filters.published_until, Some(now));
+        assert_eq!(filters.sort_by, Some(SortBy::Title));
+        assert_eq!(filters.sort_order, Some(SortDirection::Ascending));
+    }
+
+    #[test]
+    fn test_sort_enums() {
+        // Test SortBy variants
+        assert_eq!(SortBy::BookmarkedDate, SortBy::BookmarkedDate);
+        assert_eq!(SortBy::PublishDate, SortBy::PublishDate);
+        assert_eq!(SortBy::Title, SortBy::Title);
+        assert_eq!(SortBy::Priority, SortBy::Priority);
+        
+        // Test SortDirection variants
+        assert_eq!(SortDirection::Ascending, SortDirection::Ascending);
+        assert_eq!(SortDirection::Descending, SortDirection::Descending);
+    }
+
+    #[test]
+    fn test_sort_enums_serialization() {
+        let sort_by = SortBy::Title;
+        let json = serde_json::to_string(&sort_by).unwrap();
+        let deserialized: SortBy = serde_json::from_str(&json).unwrap();
+        assert_eq!(sort_by, deserialized);
+        
+        let sort_direction = SortDirection::Descending;
+        let json = serde_json::to_string(&sort_direction).unwrap();
+        let deserialized: SortDirection = serde_json::from_str(&json).unwrap();
+        assert_eq!(sort_direction, deserialized);
     }
 
     #[test]

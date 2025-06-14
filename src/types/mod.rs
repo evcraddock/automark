@@ -1,6 +1,6 @@
 pub mod bookmark;
 
-pub use bookmark::{Bookmark, Note, ReadingStatus, BookmarkFilters, ExtractedMetadata};
+pub use bookmark::{Bookmark, Note, ReadingStatus, BookmarkFilters, ExtractedMetadata, SortBy, SortDirection};
 
 use thiserror::Error;
 
