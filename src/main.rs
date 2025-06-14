@@ -36,7 +36,7 @@ fn handle_bookmark_error(error: BookmarkError, format: OutputFormat) -> ! {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let format = OutputFormat::from(cli.json);
+    let format = OutputFormat::from(cli.output);
     
     // Initialize repository
     let data_file_path = get_data_file_path()?;

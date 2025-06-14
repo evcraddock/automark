@@ -84,16 +84,8 @@ impl AutomergeBookmarkRepository {
 
     fn save(&mut self) -> BookmarkResult<()> {
         let bytes = self.doc.save();
-        
-        // Use atomic write: write to temp file, then rename
-        let temp_path = self.file_path.with_extension("tmp");
-        
-        fs::write(&temp_path, bytes)
-            .map_err(|e| BookmarkError::InvalidUrl(format!("Failed to write temp file: {}", e)))?;
-        
-        fs::rename(&temp_path, &self.file_path)
-            .map_err(|e| BookmarkError::InvalidUrl(format!("Failed to rename file: {}", e)))?;
-        
+        fs::write(&self.file_path, bytes)
+            .map_err(|e| BookmarkError::InvalidUrl(format!("Failed to write file: {}", e)))?;
         Ok(())
     }
 

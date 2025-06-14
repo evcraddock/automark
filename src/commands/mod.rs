@@ -21,15 +21,6 @@ pub enum OutputFormat {
     Json,
 }
 
-impl From<bool> for OutputFormat {
-    fn from(json: bool) -> Self {
-        if json {
-            Self::Json
-        } else {
-            Self::Human
-        }
-    }
-}
 
 /// Standard JSON response wrapper
 #[derive(Serialize, Deserialize, Debug)]
@@ -140,9 +131,26 @@ pub mod output {
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
-    /// Output in JSON format
-    #[arg(long, global = true)]
-    pub json: bool,
+    /// Output format
+    #[arg(short = 'o', long = "output", value_enum, default_value = "human", global = true)]
+    pub output: OutputFormatArg,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum OutputFormatArg {
+    /// Human-readable output
+    Human,
+    /// JSON output
+    Json,
+}
+
+impl From<OutputFormatArg> for OutputFormat {
+    fn from(arg: OutputFormatArg) -> Self {
+        match arg {
+            OutputFormatArg::Human => Self::Human,
+            OutputFormatArg::Json => Self::Json,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -317,26 +325,40 @@ mod tests {
     }
 
     #[test]
-    fn test_json_flag_parsing() {
-        // Test without JSON flag
+    fn test_output_format_parsing() {
+        // Test default output format (human)
         let cli = Cli::try_parse_from(&["automark", "list"]);
         assert!(cli.is_ok());
         if let Ok(cli) = cli {
-            assert_eq!(cli.json, false);
+            assert!(matches!(cli.output, OutputFormatArg::Human));
         }
 
-        // Test with JSON flag
-        let cli = Cli::try_parse_from(&["automark", "--json", "list"]);
+        // Test with short flag
+        let cli = Cli::try_parse_from(&["automark", "-o", "json", "list"]);
         assert!(cli.is_ok());
         if let Ok(cli) = cli {
-            assert_eq!(cli.json, true);
+            assert!(matches!(cli.output, OutputFormatArg::Json));
         }
 
-        // Test JSON flag with add command
-        let cli = Cli::try_parse_from(&["automark", "--json", "add", "https://example.com", "Test"]);
+        // Test with long flag
+        let cli = Cli::try_parse_from(&["automark", "--output", "json", "list"]);
         assert!(cli.is_ok());
         if let Ok(cli) = cli {
-            assert_eq!(cli.json, true);
+            assert!(matches!(cli.output, OutputFormatArg::Json));
+        }
+
+        // Test explicit human format
+        let cli = Cli::try_parse_from(&["automark", "--output", "human", "list"]);
+        assert!(cli.is_ok());
+        if let Ok(cli) = cli {
+            assert!(matches!(cli.output, OutputFormatArg::Human));
+        }
+
+        // Test output flag with add command
+        let cli = Cli::try_parse_from(&["automark", "-o", "json", "add", "https://example.com", "Test"]);
+        assert!(cli.is_ok());
+        if let Ok(cli) = cli {
+            assert!(matches!(cli.output, OutputFormatArg::Json));
             if let Commands::Add(args) = cli.command {
                 assert_eq!(args.url, "https://example.com");
                 assert_eq!(args.title, Some("Test".to_string()));
@@ -345,9 +367,9 @@ mod tests {
     }
 
     #[test]
-    fn test_output_format_from_bool() {
-        assert_eq!(OutputFormat::from(false), OutputFormat::Human);
-        assert_eq!(OutputFormat::from(true), OutputFormat::Json);
+    fn test_output_format_from_arg() {
+        assert_eq!(OutputFormat::from(OutputFormatArg::Human), OutputFormat::Human);
+        assert_eq!(OutputFormat::from(OutputFormatArg::Json), OutputFormat::Json);
     }
 
     #[test]
