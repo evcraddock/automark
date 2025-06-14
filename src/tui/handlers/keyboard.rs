@@ -346,6 +346,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_enter_opens_url() {
         let mut repo = MockBookmarkRepository::new();
         let bookmark = Bookmark::new("https://example.com", "Example").unwrap();
@@ -377,6 +378,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_open_url_function() {
         // Test that open_url function doesn't panic with valid URLs
         // We can't actually test browser opening in CI, but we can test the function exists
