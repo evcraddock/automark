@@ -41,30 +41,6 @@ fn get_key_hints(mode: &ViewMode) -> &'static str {
     }
 }
 
-/// Render a simple status message
-#[allow(dead_code)]
-pub fn render_status_message(f: &mut Frame, area: Rect, message: &str, color: Color) {
-    let status = Paragraph::new(message)
-        .style(Style::default().fg(color))
-        .block(Block::default().borders(Borders::ALL));
-    f.render_widget(status, area);
-}
-
-/// Render bookmark count and filter info
-#[allow(dead_code)]
-pub fn render_bookmark_info(f: &mut Frame, area: Rect, total_count: usize, filtered_count: Option<usize>) {
-    let info_text = if let Some(filtered) = filtered_count {
-        format!("Showing {} of {} bookmarks", filtered, total_count)
-    } else {
-        format!("{} bookmarks", total_count)
-    };
-
-    let info = Paragraph::new(info_text)
-        .style(Style::default().fg(Color::Cyan))
-        .block(Block::default().borders(Borders::ALL).title("Info"));
-    f.render_widget(info, area);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,29 +83,4 @@ mod tests {
         assert!(!get_key_hints(&ViewMode::Delete).is_empty());
     }
 
-    #[test]
-    fn test_bookmark_info_rendering() {
-        let backend = TestBackend::new(40, 3);
-        let mut terminal = Terminal::new(backend).unwrap();
-        
-        terminal.draw(|f| {
-            let area = Rect::new(0, 0, 40, 3);
-            render_bookmark_info(f, area, 100, Some(25));
-        }).unwrap();
-
-        // Test passes if no panic occurs during rendering
-    }
-
-    #[test]
-    fn test_status_message_rendering() {
-        let backend = TestBackend::new(40, 3);
-        let mut terminal = Terminal::new(backend).unwrap();
-        
-        terminal.draw(|f| {
-            let area = Rect::new(0, 0, 40, 3);
-            render_status_message(f, area, "Loading...", Color::Yellow);
-        }).unwrap();
-
-        // Test passes if no panic occurs during rendering
-    }
 }
