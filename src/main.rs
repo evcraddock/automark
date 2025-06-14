@@ -5,7 +5,7 @@ mod commands;
 
 use std::process;
 use clap::Parser;
-use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, handle_search_command, output};
+use commands::{Cli, Commands, OutputFormat, handle_add_command, handle_list_command, handle_delete_command, handle_search_command, handle_sync_command, output};
 use adapters::{AutomergeBookmarkRepository, FileStorageManager};
 use types::{BookmarkError, ConfigError};
 
@@ -29,6 +29,7 @@ fn handle_bookmark_error(error: BookmarkError, format: OutputFormat) -> ! {
         BookmarkError::EmptyTitle => 2,
         BookmarkError::InvalidId(_) => 3,
         BookmarkError::MetadataExtraction(_) => 4,
+        BookmarkError::SyncError(_) => 5,
     };
     process::exit(exit_code);
 }
@@ -85,6 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Search(args) => {
             handle_search_command(args, &mut repository, format).await
+        }
+        Commands::Sync(args) => {
+            handle_sync_command(&args, &mut repository, format).await
         }
     };
     

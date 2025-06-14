@@ -30,6 +30,8 @@ pub enum BookmarkError {
     InvalidId(String),
     #[error("Metadata extraction failed: {0}")]
     MetadataExtraction(#[from] ExtractorError),
+    #[error("Sync failed: {0}")]
+    SyncError(String),
 }
 
 pub type BookmarkResult<T> = Result<T, BookmarkError>;
